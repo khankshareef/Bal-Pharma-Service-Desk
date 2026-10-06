@@ -1,4 +1,9 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, redirect } from "react-router-dom";
+
+import AppShell from "../component/common/404Page/AppShell";
+import NoInternet from "../component/common/404Page/NoInternet";
+import PageNotFound from "../component/common/404Page/PageNotFound";
+import ProtectedRoute from "../component/common/404Page/ProtectedRoute";
 import DepAdminLayout from "../component/common/dep_admin/DepAdminLayout";
 import ExecutiveLayout from "../component/common/exicutive/ExecutiveLayout";
 import SuperAdminLayout from "../component/common/sup_admin/SuperAdminLayout";
@@ -12,31 +17,46 @@ import { UserMain_Route } from "./User/UserMain_Route";
 
 export const MainRoute = createBrowserRouter([
   {
-    path: "/login",
-    Component: Login,
-  },
-  {
-    path:"/change-password",
-    Component: Password_Change,
-  },
-  {
-    path: "/employee",
-    Component: UserLayout,
-    children: UserMain_Route,
-  },
-  {
-    path: "/executive",
-    Component: ExecutiveLayout,
-    children: ExicutiveMain_Route,
-  },
-  {
-    path: "/super-manager",
-    Component: SuperAdminLayout,
-    children: SuperAdminMain_Route,
-  },
-  {
-    path: "/deputy-manager",
-    Component: DepAdminLayout,
-    children: DepAdminMain_Route,
+    path: "/",
+    Component: AppShell,
+    children: [
+      {
+        index: true,
+        loader: () => redirect("/login"),
+      },
+
+      { path: "login",           Component: Login },
+      { path: "change-password", Component: Password_Change },
+
+      {
+        Component: ProtectedRoute,
+        children: [
+          {
+            path: "employee",
+            Component: UserLayout,
+            children: UserMain_Route,
+          },
+          {
+            path: "executive",
+            Component: ExecutiveLayout,
+            children: ExicutiveMain_Route,
+          },
+          {
+            path: "super-manager",
+            Component: SuperAdminLayout,
+            children: SuperAdminMain_Route,
+          },
+          {
+            path: "deputy-manager",
+            Component: DepAdminLayout,
+            children: DepAdminMain_Route,
+          },
+        ],
+      },
+
+      { path: "no-internet", Component: NoInternet },
+
+      { path: "*", Component: PageNotFound },
+    ],
   },
 ]);

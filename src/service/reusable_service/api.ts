@@ -9,7 +9,7 @@ type Coords = { lat: number; lng: number };
 
 let cachedCoords: Coords | null = null;
 let lastFetchedAt = 0;
-const CACHE_TTL_MS = 30_000;     
+const CACHE_TTL_MS = 30_000;
 const GEO_TIMEOUT_MS = 5_000;
 
 function getCoords(): Promise<Coords | null> {
@@ -54,7 +54,6 @@ const api = axios.create({
 
 api.interceptors.request.use(
   async (config) => {
-    // 1) auth token
     const token = sessionStorage.getItem("accessToken");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -62,7 +61,7 @@ api.interceptors.request.use(
 
     const coords = await getCoords();
     if (coords) {
-      config.headers["X-Client-Latitude"]  = String(coords.lat);
+      config.headers["X-Client-Latitude"] = String(coords.lat);
       config.headers["X-Client-Longitude"] = String(coords.lng);
     }
 
@@ -92,15 +91,16 @@ api.interceptors.response.use(
       );
     }
 
+    if (!error.response && error.code !== "ERR_CANCELED") {
+      window.dispatchEvent(new Event("network-error"));
+    }
+
     return Promise.reject(error);
   }
 );
 
 export const Reusable_Service = {
-  get: async <T>(
-    url: string,
-    config?: AxiosRequestConfig
-  ): Promise<T> => {
+  get: async <T>(url: string, config?: AxiosRequestConfig): Promise<T> => {
     const response: AxiosResponse<T> = await api.get(url, config);
     return response.data;
   },
@@ -132,10 +132,7 @@ export const Reusable_Service = {
     return response.data;
   },
 
-  delete: async <T>(
-    url: string,
-    config?: AxiosRequestConfig
-  ): Promise<T> => {
+  delete: async <T>(url: string, config?: AxiosRequestConfig): Promise<T> => {
     const response: AxiosResponse<T> = await api.delete(url, config);
     return response.data;
   },
