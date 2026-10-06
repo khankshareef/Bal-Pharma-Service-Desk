@@ -8,28 +8,28 @@ import Reusable_Field from "../../../component/fields/Reusable_Field";
 import Loader from "../../../component/loader/Loader";
 
 import {
-    create_User,
-    createUnit,
-    fetchUnits,
+  create_User,
+  createUnit,
+  fetchUnits,
 } from "../../../store/super_admin/slice/Add_User";
 
 import {
-    fetchUserById,
-    updateUser,
+  fetchUserById,
+  updateUser,
 } from "../../../store/super_admin/slice/usersSlice";
 
 import {
-    fetchDepartments,
+  fetchDepartments,
 } from "../../../store/super_admin/slice/DepartmentSlice";
 
 import {
-    fetchCategories,
-    fetchCategoriesByDepartment,
+  fetchCategories,
+  fetchCategoriesByDepartment,
 } from "../../../store/super_admin/slice/CategorySlice";
 
 import type {
-    AppDispatch,
-    RootState,
+  AppDispatch,
+  RootState,
 } from "../../../store/store/Store";
 
 type RoleUnitMap = Record<string, string[]>;
