@@ -1,0 +1,208 @@
+import { useEffect, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
+
+import Reusable_Button from "../../../component/button/Reusable_Button";
+import Loader from "../../../component/loader/Loader";
+
+import type { AppDispatch, RootState } from "../../../store/store/Store";
+import {
+    fetchNotifications,
+    markAllNotificationsRead,
+    markNotificationRead,
+    type Notification as NotificationType,
+} from "../../../store/user/slice/NotificationSlice";
+
+const iconFor = (type: NotificationType["type"]) => {
+  switch (type) {
+    case "WARNING": return "⚠️";
+    case "SUCCESS": return "✅";
+    case "ERROR":   return "❌";
+    default:        return "ℹ️";
+  }
+};
+
+const ticketDetailPathFor = (role?: string, ticketId?: number | null) => {
+  if (!ticketId) return null;
+
+  const r = (role ?? "").toUpperCase();
+  switch (r) {
+    case "EMPLOYEE":
+      return `tkt-details/${ticketId}`;
+    case "EXECUTIVE":
+      return `assigned-details/${ticketId}`;
+    case "DEPUTY_MANAGER":
+    case "SUPER_MANAGER":
+    case "ADMIN":
+      return `tkt-details/${ticketId}`;
+    default:
+      return `tkt-details/${ticketId}`;
+  }
+};
+
+const Notification_Page = () => {
+  const dispatch = useDispatch<AppDispatch>();
+  const navigate = useNavigate();
+
+  const user = useSelector((s: any) => s.auth?.user ?? s.loginRoute?.user);
+  const employeeId = user?.employeeId ?? "";
+  const role: string = user?.role ?? "";
+
+  const { items: notifications, unreadCount, loading } = useSelector(
+    (s: RootState) => s.notifications
+  );
+
+  const [localLoading, setLocalLoading] = useState(false);
+
+  useEffect(() => {
+    if (!employeeId) return;
+    setLocalLoading(true);
+    dispatch(fetchNotifications(employeeId)).finally(() =>
+      setLocalLoading(false)
+    );
+  }, [dispatch, employeeId]);
+
+  const handleMarkAsRead = async (id: number) => {
+    if (!employeeId) return;
+    try {
+      setLocalLoading(true);
+      await dispatch(markNotificationRead({ id, employeeId })).unwrap();
+    } catch {
+    } finally {
+      setLocalLoading(false);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    if (!employeeId) return;
+    try {
+      setLocalLoading(true);
+      await dispatch(markAllNotificationsRead(employeeId)).unwrap();
+    } finally {
+      setLocalLoading(false);
+    }
+  };
+
+  const handleClick = (notif: NotificationType) => {
+    // mark as read first (fire and forget)
+    if (!notif.isRead) handleMarkAsRead(notif.id);
+
+    // then navigate to the ticket if we can
+    const path = ticketDetailPathFor(role, notif.ticketId ?? null);
+    if (path) {
+      navigate(path);
+    }
+  };
+
+  if (loading && notifications.length === 0) return <Loader />;
+
+  return (
+    <div className="max-w-full mx-auto font-sans relative">
+      {/* top-level loader overlay while mutating */}
+      {localLoading && (
+        <div className="fixed inset-0 z-40 bg-white/60 backdrop-blur-sm flex items-center justify-center">
+          <Loader />
+        </div>
+      )}
+
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">
+          Notifications{" "}
+          {unreadCount > 0 && (
+            <span className="text-sm font-normal text-gray-500 ml-2">
+              ({unreadCount} unread)
+            </span>
+          )}
+        </h1>
+
+        <Reusable_Button
+          onClick={handleMarkAllRead}
+          disabled={unreadCount === 0 || localLoading}
+          children="Mark All Read"
+          variant="secondary"
+          className={`px-4 py-2 border rounded-full text-sm font-medium ${
+            unreadCount > 0
+              ? "border-gray-300 text-gray-700 hover:bg-gray-50"
+              : "border-gray-200 text-gray-400 cursor-not-allowed"
+          }`}
+        />
+      </div>
+
+      <div className="bg-[#F8FAFC] border border-gray-100 rounded-2xl p-6 shadow-sm">
+        {notifications.length === 0 ? (
+          <div className="py-12 text-center">
+            <p className="text-gray-500 font-medium">No notifications yet.</p>
+            <p className="text-xs text-gray-400 mt-2">
+              You'll be notified when tickets are created, updated, or resolved.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {notifications.map((notif) => (
+              <div
+                key={notif.id}
+                className={`relative flex flex-col p-4 pl-5 rounded-xl transition-all border ${
+                  !notif.isRead
+                    ? "bg-[#F0F6FF] hover:bg-[#e4effc] border-[#003D8C]/20"
+                    : "bg-white hover:bg-gray-50 border-gray-100"
+                }`}
+              >
+                {!notif.isRead && (
+                  <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#003D8C] rounded-l-xl" />
+                )}
+
+                <div className="flex justify-between items-start">
+                  <div
+                    onClick={() => handleClick(notif)}
+                    className="flex-1 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      {!notif.isRead && (
+                        <div className="w-2.5 h-2.5 bg-[#003D8C] rounded-full mr-1 shrink-0" />
+                      )}
+                      <span className="text-lg">{iconFor(notif.type)}</span>
+                      <h2
+                        className={`font-bold text-base ${
+                          notif.isRead ? "text-gray-600" : "text-black"
+                        }`}
+                      >
+                        {notif.title}
+                      </h2>
+                    </div>
+
+                    <p className="text-sm text-gray-600 ml-7">
+                      {notif.message}
+                    </p>
+
+                    {notif.ticketCode && (
+                      <p className="text-xs text-blue-600 ml-7 mt-1 font-medium">
+                        Ticket: {notif.ticketCode}
+                      </p>
+                    )}
+
+                    <p className="text-sm text-gray-400 ml-7 mt-0.5">
+                      {new Date(notif.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+
+                  {/* <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(notif.id);
+                    }}
+                    className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                    title="Delete"
+                  >
+                    <FiTrash2 size={16} />
+                  </button> */}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Notification_Page;
