@@ -35,8 +35,8 @@ export interface RecentTicketItem {
   id: number;
   ticketId: string;
   subject: string;
-  departmentName: string;
-  categoryName: string;
+  department: string;
+  category: string;
   priority: string;
   status: string;
   sla: string;
