@@ -158,7 +158,7 @@ const Admin_Header = () => {
       } else if (role === "EXECUTIVE" || role === "DEPUTY_MANAGER") {
         navigate(`/executive/assigned/assigned-details/${notif.ticketId}`);
       } else {
-        navigate(`/super-manager/all-tickets/${notif.ticketId}`);
+        navigate(`/super-manager/all-tickets/tkt-details/${notif.ticketId}`);
       }
     }
     setIsNotificationOpen(false);

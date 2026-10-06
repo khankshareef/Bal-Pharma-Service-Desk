@@ -12,16 +12,14 @@ import {
 } from "react-icons/fi";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
-
-import { createRating } from "../../../store/user/slice/ratingSlice";
-
 import Reusable_Button from "../../../component/button/Reusable_Button";
 import Reusable_Field from "../../../component/fields/Reusable_Field";
 import Loader from "../../../component/loader/Loader";
 import ReusablePopup from "../../../component/popups/Reusable_Popup";
 import Rating_Model from "../../../component/Rating_Model/Rating_Model";
-
 import type { AppDispatch, RootState } from "../../../store/store/Store";
+import { createRating } from "../../../store/user/slice/ratingSlice";
+
 import {
   fetchTicketById,
   updateTicketStatus,
