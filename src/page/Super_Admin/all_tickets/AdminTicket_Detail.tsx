@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-    FiArrowLeft,
-    FiAward,
-    FiCalendar,
-    FiClock,
-    FiTag
+  FiArrowLeft,
+  FiAward,
+  FiCalendar,
+  FiClock,
+  FiTag
 } from "react-icons/fi";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams } from "react-router-dom";
@@ -14,12 +14,12 @@ import Loader from "../../../component/loader/Loader";
 
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import {
-    fetchTicketById,
-    type Ticket,
+  fetchTicketById,
+  type Ticket,
 } from "../../../store/user/slice/TicketsSlice";
 import {
-    fetchRatingsByTicket,
-    type Rating,
+  fetchRatingsByTicket,
+  type Rating,
 } from "../../../store/user/slice/ratingSlice";
 
 const fmtDate = (iso?: string | null) =>

@@ -9,6 +9,7 @@ import Reusable_Table, {
   type TableColumn,
 } from "../../../component/table/Reusable_Table";
 
+import Loader from "../../../component/loader/Loader";
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import {
   deleteCategory,
@@ -110,6 +111,14 @@ const Categories = () => {
     setModelOpen(false);
     setEditing(null);
   };
+
+  if (loading && categories.length === 0) {
+    return (
+      <div className="min-h-screen bg-slate-50 font-sans flex items-center justify-center">
+        <Loader />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-full mx-auto font-sans">

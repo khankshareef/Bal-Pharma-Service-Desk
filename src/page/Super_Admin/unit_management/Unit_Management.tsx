@@ -9,6 +9,7 @@ import Reusable_Table, {
   type TableColumn,
 } from "../../../component/table/Reusable_Table";
 
+import Loader from "../../../component/loader/Loader";
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import {
   deleteUnit,
@@ -54,7 +55,6 @@ const Unit_Management = () => {
     [apiUnits]
   );
 
-  // KPI stats from current data
   const stats = useMemo(() => {
     const total = unitData.length;
     const active = unitData.filter((u) => u.Status === "Active").length;
@@ -89,7 +89,6 @@ const Unit_Management = () => {
     if (!confirm(`Delete unit "${row.UnitName}" (${row.UnitID})?`)) return;
     try {
       await dispatch(deleteUnit(row.id)).unwrap();
-      // Redux already removes it from state
     } catch (err: any) {
       alert(err?.error || err?.message || "Failed to delete unit.");
     }
@@ -99,6 +98,14 @@ const Unit_Management = () => {
     setModelOpen(false);
     setEditingUnit(null);
   };
+
+  if (loading && unitData.length === 0) {
+    return (
+      <div className="min-h-screen bg-slate-50 font-sans flex items-center justify-center">
+        <Loader />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-full mx-auto font-sans">

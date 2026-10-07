@@ -34,7 +34,7 @@ const emptyForm: FormState = {
   portCode: "",
   latitude: "",
   longitude: "",
-  radiusMeters: "500",
+  radiusMeters: "100",
   status: "Active",
 };
 

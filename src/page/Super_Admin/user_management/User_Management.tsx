@@ -12,6 +12,7 @@ import Reusable_Table, {
   type TableColumn,
 } from "../../../component/table/Reusable_Table";
 
+import Loader from "../../../component/loader/Loader";
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import {
   deleteUser,
@@ -40,6 +41,8 @@ const humanizeRole = (role: string) => {
     default:               return role;
   }
 };
+
+
 
 const User_Management = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -129,6 +132,14 @@ const User_Management = () => {
   const handleSelectionChange = useCallback((selected: UserRow[]) => {
     setSelectedUsers(selected);
   }, []);
+
+    if (loading && userRows.length === 0) {
+    return (
+      <div className="min-h-screen bg-slate-50 font-sans flex items-center justify-center">
+        <Loader />
+      </div>
+    );
+  }
 
   return (
     <div>

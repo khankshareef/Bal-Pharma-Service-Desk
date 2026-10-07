@@ -71,6 +71,9 @@ const AdminUser_Details = () => {
   const [user, setUser] = useState<User | null>(cached ?? null);
   const [loading, setLoading] = useState(!cached);
 
+const UserRole = user ? humanizeRole(user.role) : "N/A";
+
+
   useEffect(() => {
     if (!id) return;
 
@@ -235,7 +238,7 @@ const AdminUser_Details = () => {
           <div>
             <p className="text-xs text-gray-500 mb-1">Role</p>
             <p className="text-[15px] text-gray-900 font-medium">
-              {humanizeRole(user.role)}
+              {UserRole}
             </p>
           </div>
           <div>

@@ -309,50 +309,28 @@ const Admin_Header = () => {
             <div className="h-9 w-9 min-w-9 bg-[#003D8C]/10 rounded-full flex items-center justify-center text-[#003D8C] text-sm font-bold">
               {initials}
             </div>
-
             <div className="hidden md:flex flex-col items-start min-w-0 max-w-[180px]">
-              <span className="text-sm font-bold text-gray-700 leading-none">
-                {user?.role
-                  ? user.role
-                      .split("_")
-                      .map((w: string) => w.charAt(0) + w.slice(1).toLowerCase())
-                      .join(" ")
-                  : "Super Manager"}
-              </span>
-              <h2
-                className="text-xs text-gray-900 truncate w-full"
-                title={user?.name || "N/A"}
-              >
+              <span className="text-sm font-bold text-gray-700 leading-none">Super Manager</span>
+              <h2 className="text-xs text-gray-900 truncate w-full" title={user?.name || "N/A"}>
                 {user?.name || "N/A"}
               </h2>
             </div>
-
-            <FiChevronDown
-              className={`text-gray-400 flex-shrink-0 transition-transform duration-200 ${
-                isProfileOpen ? "rotate-180" : ""
-              }`}
-            />
+            <FiChevronDown className={`text-gray-400 flex-shrink-0 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`} />
           </button>
 
           {isProfileOpen && (
             <div className="absolute right-0 mt-3 w-max min-w-56 max-w-[300px] bg-white rounded-xl shadow-lg border border-gray-100 py-2 flex flex-col z-50">
               <button
-                onClick={() => {
-                  navigate("admin-profile");
-                  setIsProfileOpen(false);
-                }}
+                onClick={() => { navigate("admin-profile"); setIsProfileOpen(false); }}
                 className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-indigo-50 hover:text-[#003D8C] transition-colors cursor-pointer whitespace-nowrap"
               >
-                <FiUser size={18} />
-                View Profile
+                <FiUser size={18} /> View Profile
               </button>
-
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors mt-1 cursor-pointer whitespace-nowrap"
               >
-                <FiLogOut size={18} />
-                Logout
+                <FiLogOut size={18} /> Logout
               </button>
             </div>
           )}

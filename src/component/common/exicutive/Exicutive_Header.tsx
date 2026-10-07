@@ -40,7 +40,6 @@ const Exicutive_Header = () => {
     (s: RootState) => s.notifications
   );
 
-  // Poll every 30s
   useEffect(() => {
     if (!employeeId) return;
     console.log(">>> Fetching notifications for", employeeId);

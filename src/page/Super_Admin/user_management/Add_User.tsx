@@ -98,7 +98,7 @@ const Add_User = () => {
     portCode: "",
     latitude: "",
     longitude: "",
-    radiusMeters: "500",
+    radiusMeters: "100",
   });
 
   useEffect(() => {
@@ -347,7 +347,7 @@ const Add_User = () => {
         portCode: "",
         latitude: "",
         longitude: "",
-        radiusMeters: "500",
+        radiusMeters: "100",
       });
       setShowAddUnitForm(false);
       alert("Unit created successfully.");
@@ -412,7 +412,7 @@ const Add_User = () => {
         portCode: u?.portCode ?? undefined,
         latitude: u?.latitude ?? null,
         longitude: u?.longitude ?? null,
-        radiusMeters: u?.radiusMeters ?? 500,
+        radiusMeters: u?.radiusMeters ?? 100,
       };
     });
 

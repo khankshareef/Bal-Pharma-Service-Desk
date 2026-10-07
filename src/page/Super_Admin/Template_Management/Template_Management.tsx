@@ -9,7 +9,6 @@ import {
   IoTrashOutline,
 } from "react-icons/io5";
 import { useDispatch, useSelector } from "react-redux";
-
 import Reusable_Button from "../../../component/button/Reusable_Button";
 import Reusable_Field from "../../../component/fields/Reusable_Field";
 
@@ -29,6 +28,7 @@ import {
 } from "../../../store/super_admin/slice/CategorySlice";
 import { fetchDepartments } from "../../../store/super_admin/slice/DepartmentSlice";
 
+import Loader from "../../../component/loader/Loader";
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 
 const priorityOptions = [
@@ -76,9 +76,6 @@ const Template_Management = () => {
     dispatch(fetchDepartments());
   }, [dispatch]);
 
-  // Load categories whenever the selected department changes.
-  // If the department is cleared, wipe the category list so stale
-  // options from a previous department never render.
   useEffect(() => {
     if (!formData.departmentId) {
       dispatch(clearCategories());
@@ -102,9 +99,6 @@ const Template_Management = () => {
     [departments]
   );
 
-  // Defensive filter: only show categories that actually belong to the
-  // currently selected department. Guards against any residual stale
-  // data in the store.
   const categoryOptions = useMemo(() => {
     const list = categories.filter((c: any) => {
       if (!formData.departmentId) return false;
@@ -166,8 +160,6 @@ const Template_Management = () => {
     setIsModalOpen(false);
     setEditingTemplate(null);
     setError(null);
-    // Don't leave a department's categories sitting in the store after
-    // the modal closes — next open should start clean.
     dispatch(clearCategories());
   };
 
@@ -245,10 +237,17 @@ const Template_Management = () => {
     }
   };
 
+  if (loading && templates.length === 0) {
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans flex items-center justify-center">
+      <Loader />
+    </div>
+  );
+}
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
       <div className="mx-auto max-w-full">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-800">

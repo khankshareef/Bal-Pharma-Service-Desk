@@ -26,26 +26,28 @@ const Dep_Sidebar = () => {
       path: "/deputy-manager/dashboard",
       icon: BiSolidDashboard,
     },
+        {
+      label: "All Tickets",
+      path: "/deputy-manager/all-tickets",
+      icon: BsTicketFill,
+    },
+    {
+      label: "All Feedbacks",
+      path: "/deputy-manager/all-feedback",
+      icon: FaStar,
+    },
     {
       label: "User Management",
       path: "/deputy-manager/user-management",
       icon: FaUsers,
     },
-    {
-      label: "Audit Log",
-      path: "/deputy-manager/audit-log",
-      icon: IoIosTimer,
-    },
+    
     {
       label: "Unit Management",
       path: "/deputy-manager/unit-management",
       icon: FaBuilding,
     },
-    {
-          label: "Template Management",
-          path: "/deputy-manager/template-management",
-          icon: MdAssignmentAdd,
-        },
+   
     {
       label: "Departments",
       path: "/deputy-manager/department",
@@ -56,15 +58,15 @@ const Dep_Sidebar = () => {
       path: "/deputy-manager/categories",
       icon: FaTags,
     },
+     {
+          label: "Template Management",
+          path: "/deputy-manager/template-management",
+          icon: MdAssignmentAdd,
+        },
     {
-      label: "All Tickets",
-      path: "/deputy-manager/all-tickets",
-      icon: BsTicketFill,
-    },
-    {
-      label: "All Feedbacks",
-      path: "/deputy-manager/all-feedback",
-      icon: FaStar,
+      label: "Audit Log",
+      path: "/deputy-manager/audit-log",
+      icon: IoIosTimer,
     },
     {
       label: "Settings",
