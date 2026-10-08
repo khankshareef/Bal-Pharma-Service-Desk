@@ -15,11 +15,13 @@ import reportsReducer from "../super_admin/slice/reportsSlice";
 import superManagerDashboardReducer from "../super_admin/slice/superManagerDashboardSlice";
 import templatesReducer from "../super_admin/slice/templatesSlice";
 import UnitSlice from "../super_admin/slice/UnitSlice";
+import commentReducer from "../user/slice/commentSlice";
 import dashboardReducer from "../user/slice/dashboardSlice";
 import LoginReducer from "../user/slice/Login_Slice";
 import notificationReducer from "../user/slice/NotificationSlice";
 import ratingReducer from "../user/slice/ratingSlice";
 import reopensReducer from "../user/slice/ReopenSlice";
+import socketReducer from "../user/slice/socketSlice";
 import ticketsReducer from "../user/slice/TicketsSlice";
 
 const store = configureStore({
@@ -46,6 +48,8 @@ const store = configureStore({
       analytics: analyticsReducer,
        reports: reportsReducer,
         config: configReducer,
+        socket: socketReducer,
+        comments: commentReducer,
   },
 });
 

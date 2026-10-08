@@ -5,27 +5,37 @@ import {
   FiAward,
   FiCalendar,
   FiClock,
-  FiFile,
   FiPaperclip,
   FiSend,
   FiTag,
 } from "react-icons/fi";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
+
+import AttachmentPreview from "../../../component/attachments/AttachmentPreview";
 import Reusable_Button from "../../../component/button/Reusable_Button";
 import Reusable_Field from "../../../component/fields/Reusable_Field";
 import Loader from "../../../component/loader/Loader";
 import ReusablePopup from "../../../component/popups/Reusable_Popup";
 import Rating_Model from "../../../component/Rating_Model/Rating_Model";
 import type { AppDispatch, RootState } from "../../../store/store/Store";
-import { createRating } from "../../../store/user/slice/ratingSlice";
-
+import {
+  addComment,
+  fetchComments,
+} from "../../../store/user/slice/commentSlice";
+import {
+  createRating,
+  fetchRatingsByTicket,
+  type Rating,
+} from "../../../store/user/slice/ratingSlice";
 import {
   fetchTicketById,
   updateTicketStatus,
   type Ticket,
 } from "../../../store/user/slice/TicketsSlice";
 import { fileUrl } from "../../../utils/fileUrl";
+
+const EMPTY_COMMENTS: never[] = [];
 
 const REOPEN_WINDOW_HOURS = 24;
 
@@ -37,7 +47,7 @@ const hoursSince = (iso?: string | null): number => {
 const isReopenAllowed = (t: Ticket): boolean => {
   const s = (t.status ?? "").toUpperCase();
   if (s === "RESOLVED") return hoursSince(t.resolvedAt) < REOPEN_WINDOW_HOURS;
-  if (s === "CLOSED")   return hoursSince(t.closedAt)   < REOPEN_WINDOW_HOURS;
+  if (s === "CLOSED") return hoursSince(t.closedAt) < REOPEN_WINDOW_HOURS;
   return false;
 };
 
@@ -60,7 +70,10 @@ const statusLabel = (s?: string) =>
 
 const slaLabel = (s?: string) =>
   s
-    ? s.split("_").map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(" ")
+    ? s
+        .split("_")
+        .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
+        .join(" ")
     : "";
 
 type PopupKind = "success" | "error" | "confirm" | "info";
@@ -80,12 +93,24 @@ const Ticket_Details = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
 
+  const ticketId = Number(id);
+
   const user = useSelector((s: any) => s.auth?.user ?? s.loginRoute?.user);
   const employeeId = user?.employeeId ?? "";
+  const currentUserId = user?.userId ?? null;
 
   const cached = useSelector((s: RootState) =>
-    s.tickets.tickets.find((t: Ticket) => t.id === Number(id))
+    s.tickets.tickets.find((t: Ticket) => t.id === ticketId)
   );
+
+  const comments = useSelector(
+    (s: RootState) => s.comments.byTicket[ticketId] ?? EMPTY_COMMENTS
+  );
+  const savingComment = useSelector(
+    (s: RootState) => s.comments.savingByTicket[ticketId] ?? false
+  );
+
+  const ratings = useSelector((s: RootState) => s.rating.list);
 
   const [ticket, setTicket] = useState<Ticket | null>(cached ?? null);
   const [loading, setLoading] = useState(!cached);
@@ -93,7 +118,6 @@ const Ticket_Details = () => {
   const [isRating, setRating] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  /* ---------- popup ---------- */
   const [popup, setPopup] = useState<PopupState>({
     isOpen: false,
     type: "info",
@@ -110,11 +134,9 @@ const Ticket_Details = () => {
     setPopup({ ...opts, isOpen: true });
   };
 
-  /* ---------- initial load ---------- */
   useEffect(() => {
     if (!id) return;
 
-    // if we already have the ticket from cache, use it — no loader flash
     if (cached) {
       setTicket(cached);
       setLoading(false);
@@ -124,7 +146,7 @@ const Ticket_Details = () => {
     let cancelled = false;
     setLoading(true);
 
-    dispatch(fetchTicketById(Number(id)))
+    dispatch(fetchTicketById(ticketId))
       .unwrap()
       .then((data) => {
         if (!cancelled) setTicket(data);
@@ -144,9 +166,17 @@ const Ticket_Details = () => {
     return () => {
       cancelled = true;
     };
-  }, [dispatch, id, cached]);
+  }, [dispatch, id, ticketId, cached]);
 
-  /* ---------- attachments ---------- */
+  useEffect(() => {
+    if (!ticketId || Number.isNaN(ticketId)) return;
+    dispatch(fetchComments(ticketId));
+  }, [ticketId, dispatch]);
+
+  useEffect(() => {
+    if (ticketId) dispatch(fetchRatingsByTicket(ticketId));
+  }, [dispatch, ticketId]);
+
   const attachments: { url: string; name: string }[] = useMemo(() => {
     if (!ticket) return [];
 
@@ -166,7 +196,10 @@ const Ticket_Details = () => {
 
     if (ticket.attachmentUrl) {
       return [
-        { url: ticket.attachmentUrl, name: ticket.attachmentName ?? "Attachment" },
+        {
+          url: ticket.attachmentUrl,
+          name: ticket.attachmentName ?? "Attachment",
+        },
       ];
     }
 
@@ -200,8 +233,6 @@ const Ticket_Details = () => {
     };
     return map[status] || "bg-gray-100 text-gray-700";
   };
-
-  /* ---------- actions ---------- */
 
   const handleClose = () => {
     if (!ticket) return;
@@ -282,8 +313,9 @@ const Ticket_Details = () => {
     });
   };
 
-  const handleSendComment = () => {
-    if (!comment.trim()) {
+  const handleSendComment = async () => {
+    const body = comment.trim();
+    if (!body) {
       showPopup({
         type: "info",
         title: "Empty Comment",
@@ -291,11 +323,25 @@ const Ticket_Details = () => {
       });
       return;
     }
-    showPopup({
-      type: "info",
-      title: "Not Wired Yet",
-      message: "The comments API has not been connected yet.",
-    });
+    if (!ticketId || Number.isNaN(ticketId)) {
+      showPopup({
+        type: "error",
+        title: "Send Failed",
+        message: "Invalid ticket ID.",
+      });
+      return;
+    }
+
+    try {
+      await dispatch(addComment({ ticketId, body })).unwrap();
+      setComment("");
+    } catch (err: any) {
+      showPopup({
+        type: "error",
+        title: "Send Failed",
+        message: err?.error || err?.message || "Failed to send comment.",
+      });
+    }
   };
 
   const handleRatingSubmit = async (data: {
@@ -313,6 +359,7 @@ const Ticket_Details = () => {
         })
       ).unwrap();
       setRating(false);
+      dispatch(fetchRatingsByTicket(ticket.id));
       showPopup({
         type: "success",
         title: "Rating Submitted",
@@ -328,9 +375,31 @@ const Ticket_Details = () => {
     }
   };
 
-  /* ---------- loading gates ---------- */
+  const rating: Rating | undefined = useMemo(
+    () => ratings.find((r) => r.ticketId === ticketId),
+    [ratings, ticketId]
+  );
 
-  // full-page loader only when there is truly nothing to show yet
+  const renderStars = (value: number) => (
+    <div className="flex items-center gap-1 mt-1">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <svg
+          key={star}
+          className={`w-4 h-4 ${
+            star <= value ? "text-yellow-400" : "text-gray-200"
+          }`}
+          fill="currentColor"
+          viewBox="0 0 20 20"
+        >
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
+      ))}
+      <span className="text-sm text-gray-700 ml-1 font-medium">
+        ({value}/5)
+      </span>
+    </div>
+  );
+
   if (loading && !ticket) {
     return (
       <div className="flex min-h-[500px] items-center justify-center">
@@ -348,14 +417,45 @@ const Ticket_Details = () => {
   }
 
   const statusUpper = (ticket.status ?? "").toUpperCase();
-  const canClose   = statusUpper === "RESOLVED";
-  const canEdit    = statusUpper !== "RESOLVED" && statusUpper !== "CLOSED";
+  const canClose = statusUpper === "RESOLVED";
+  const canEdit = statusUpper !== "RESOLVED" && statusUpper !== "CLOSED";
   const showReopen = statusUpper === "RESOLVED" || statusUpper === "CLOSED";
-  const canReopen  = isReopenAllowed(ticket);
+  const canReopen = isReopenAllowed(ticket);
+  const showRateButton =
+    (statusUpper === "RESOLVED" || statusUpper === "CLOSED") && !rating;
+
+  const activity: { time: string; role: string; text: string }[] = [];
+  activity.push({
+    time: formatDate(ticket.createdAt),
+    role: ticket.createdByName ?? "Employee",
+    text: "Ticket created and submitted.",
+  });
+  if (ticket.assignedAt && ticket.assignedToName) {
+    activity.push({
+      time: formatDate(ticket.assignedAt),
+      role: "Executive",
+      text: `Ticket assigned to ${ticket.assignedToEmployeeId}.`,
+    });
+  }
+  if (ticket.resolvedAt) {
+    activity.push({
+      time: formatDate(ticket.resolvedAt),
+      role: "Executive",
+      text: "Ticket resolved.",
+    });
+  }
+  if (rating) {
+    activity.push({
+      time: formatDate(rating.createdAt),
+      role: "User",
+      text: `Rating: ${rating.rating}/5${
+        rating.comments ? ` — "${rating.comments}"` : ""
+      }`,
+    });
+  }
 
   return (
     <div className="max-w-full mx-auto font-sans">
-
       {loading && ticket && (
         <div className="flex items-center gap-2 mb-4 px-2 text-sm text-gray-500">
           <Loader text="Refreshing ticket" />
@@ -425,26 +525,46 @@ const Ticket_Details = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <InfoTile icon={FiTag} bg="bg-blue-50" color="text-blue-600" label="Category" value={ticket.categoryName ?? "—"} />
+        <InfoTile
+          icon={FiTag}
+          bg="bg-blue-50"
+          color="text-blue-600"
+          label="Category"
+          value={ticket.categoryName ?? "—"}
+        />
         <InfoTile
           icon={FiAward}
           bg="bg-purple-50"
           color="text-purple-600"
           label="Priority"
           value={
-            <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getPriorityColor(ticket.priority)}`}>
+            <span
+              className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getPriorityColor(
+                ticket.priority
+              )}`}
+            >
               {priorityLabel(ticket.priority)}
             </span>
           }
         />
-        <InfoTile icon={FiCalendar} bg="bg-green-50" color="text-green-600" label="Raised" value={formatDate(ticket.createdAt)} />
+        <InfoTile
+          icon={FiCalendar}
+          bg="bg-green-50"
+          color="text-green-600"
+          label="Raised"
+          value={formatDate(ticket.createdAt)}
+        />
         <InfoTile
           icon={FiClock}
           bg="bg-orange-50"
           color="text-orange-600"
           label="SLA"
           value={
-            <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getSLAColor(ticket.slaStatus)}`}>
+            <span
+              className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getSLAColor(
+                ticket.slaStatus
+              )}`}
+            >
               {slaLabel(ticket.slaStatus)}
             </span>
           }
@@ -455,36 +575,113 @@ const Ticket_Details = () => {
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-xl border border-gray-200">
             <div className="border-b border-gray-100 px-6 py-4">
-              <h3 className="font-bold text-gray-800 text-[15px]">Ticket Details</h3>
+              <h3 className="font-bold text-gray-800 text-[15px]">
+                Ticket Details
+              </h3>
             </div>
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <Field label="Ticket ID" value={ticket.ticketCode} />
                   <Field label="Subject" value={ticket.subject} />
-                  <Field label="Department" value={ticket.departmentName ?? "—"} />
-                  <Field label="Sub Category" value={ticket.subCategoryName ?? "—"} />
+                  <Field
+                    label="Department"
+                    value={ticket.departmentName ?? "—"}
+                  />
+                  <Field
+                    label="Sub Category"
+                    value={ticket.subCategoryName ?? "—"}
+                  />
                 </div>
                 <div className="space-y-4">
-                  <Field label="Raised By" value={`${ticket.createdByName ?? "—"} (${ticket.createdByEmployeeId ?? "—"})`} />
+                  <Field
+                    label="Raised By"
+                    value={`${ticket.createdByName ?? "—"} (${
+                      ticket.createdByEmployeeId ?? "—"
+                    })`}
+                  />
                   <Field label="Unit" value={`${ticket.unitName ?? "—"}`} />
-                  <div>
-                    <label className="text-xs text-gray-500 uppercase block mb-1">Priority</label>
-                    <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold border ${getPriorityColor(ticket.priority)}`}>
-                      {priorityLabel(ticket.priority)}
-                    </span>
-                  </div>
-                  <Field label="Last Updated" value={formatDate(ticket.updatedAt)} />
-                  {ticket.resolvedAt && <Field label="Resolved" value={formatDate(ticket.resolvedAt)} />}
-                  {ticket.closedAt && <Field label="Closed" value={formatDate(ticket.closedAt)} />}
+                  <Field
+                    label="Assigned To"
+                    value={ticket.assignedToEmployeeId ?? "Unassigned"}
+                  />
+                  <Field
+                    label="Last Updated"
+                    value={formatDate(ticket.updatedAt)}
+                  />
+                  {ticket.resolvedAt && (
+                    <Field
+                      label="Resolved"
+                      value={formatDate(ticket.resolvedAt)}
+                    />
+                  )}
+                  {ticket.closedAt && (
+                    <Field
+                      label="Closed"
+                      value={formatDate(ticket.closedAt)}
+                    />
+                  )}
                 </div>
               </div>
+
               <div className="mt-6 pt-6 border-t border-gray-100">
-                <label className="text-xs text-gray-500 uppercase block mb-2">Description</label>
+                <label className="text-xs text-gray-500 uppercase block mb-2">
+                  Description
+                </label>
                 <p className="text-gray-700 text-sm leading-relaxed">
                   {ticket.description || "No description provided."}
                 </p>
               </div>
+
+              {ticket.resolutionNotes && (
+                <div className="mt-6 pt-6 border-t border-gray-100">
+                  <label className="text-xs text-gray-500 uppercase block mb-2">
+                    Resolution Notes
+                  </label>
+                  <p className="text-gray-700 text-sm leading-relaxed">
+                    {ticket.resolutionNotes}
+                  </p>
+                  {ticket.resolutionType && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      Type: <strong>{ticket.resolutionType}</strong>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="mt-6 pt-6 border-t border-gray-100">
+                <label className="text-xs text-gray-500 uppercase block mb-1">
+                  Rating
+                </label>
+                {rating ? (
+                  renderStars(rating.rating)
+                ) : (
+                  <p className="text-sm text-gray-400 italic">
+                    Not rated yet
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200">
+            <div className="border-b border-gray-100 px-6 py-4">
+              <h3 className="font-bold text-gray-800 text-[15px]">
+                Activity Timeline
+              </h3>
+            </div>
+            <div className="p-6 space-y-3">
+              {activity.map((a, i) => (
+                <div key={i} className="flex items-center text-[14px]">
+                  <div className="w-44 text-gray-600 shrink-0">{a.time}</div>
+                  <div className="w-28 shrink-0">
+                    <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
+                      {a.role}
+                    </span>
+                  </div>
+                  <div className="text-gray-800">{a.text}</div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -494,28 +691,112 @@ const Ticket_Details = () => {
                 <FiPaperclip className="text-blue-600" />
                 Attachments
                 {attachments.length > 0 && (
-                  <span className="text-xs font-normal text-gray-400">({attachments.length})</span>
+                  <span className="text-xs font-normal text-gray-400">
+                    ({attachments.length})
+                  </span>
                 )}
               </h3>
             </div>
             <div className="p-6 space-y-4">
               {attachments.length === 0 ? (
-                <p className="text-sm text-gray-500">No files attached to this ticket.</p>
+                <p className="text-sm text-gray-500">
+                  No files attached to this ticket.
+                </p>
               ) : (
                 attachments.map((a, i) => (
-                  <AttachmentPreview key={i} url={fileUrl(a.url)} name={a.name} />
+                  <AttachmentPreview
+                    key={i}
+                    url={fileUrl(a.url)}
+                    name={a.name}
+                  />
                 ))
               )}
             </div>
           </div>
         </div>
 
+        {/* Right column — Comments */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-xl border border-gray-200 sticky top-6">
-            <div className="border-b border-gray-100 px-6 py-4">
-              <h3 className="font-bold text-gray-800 text-[15px]">Comments</h3>
+          <div className="bg-white rounded-xl border border-gray-200 sticky top-6 flex flex-col max-h-[calc(100vh-3rem)]">
+            <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+              <h3 className="font-bold text-gray-800 text-[15px]">
+                Comments
+              </h3>
+              <span className="text-xs text-gray-400">
+                {comments.length}
+              </span>
             </div>
-            <div className="p-4 text-sm text-gray-500">Comments API not wired yet.</div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {comments.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6">
+                  No comments yet.
+                </p>
+              ) : (
+                comments.map((c) => {
+                  const isMine =
+                    currentUserId !== null && c.authorId === currentUserId;
+
+                  return (
+                    <div
+                      key={c.id}
+                      className={`flex gap-2 ${
+                        isMine ? "flex-row-reverse" : "flex-row"
+                      }`}
+                    >
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                          isMine
+                            ? "bg-blue-600 text-white"
+                            : "bg-blue-100 text-blue-700"
+                        }`}
+                      >
+                        <span className="text-xs font-bold">
+                          {c.authorInitials || "?"}
+                        </span>
+                      </div>
+
+                      <div
+                        className={`flex-1 rounded-lg px-3 py-2 min-w-0 ${
+                          isMine
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-50 text-gray-800"
+                        }`}
+                      >
+                        <div
+                          className={`flex items-center gap-2 mb-0.5 ${
+                            isMine ? "flex-row-reverse justify-end" : ""
+                          }`}
+                        >
+                          <span
+                            className={`text-sm font-semibold truncate ${
+                              isMine ? "text-white" : "text-gray-800"
+                            }`}
+                          >
+                            {isMine ? "You" : c.authorName}
+                          </span>
+                          <span
+                            className={`text-[11px] shrink-0 ${
+                              isMine ? "text-blue-100" : "text-gray-400"
+                            }`}
+                          >
+                            {formatDate(c.createdAt)}
+                          </span>
+                        </div>
+                        <p
+                          className={`text-sm whitespace-pre-wrap break-words ${
+                            isMine ? "text-white" : "text-gray-700"
+                          }`}
+                        >
+                          {c.body}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
             <div className="border-t border-gray-100 p-4">
               <Reusable_Field
                 label="Add a comment"
@@ -526,12 +807,13 @@ const Ticket_Details = () => {
               />
               <div className="flex justify-end gap-2 mt-2">
                 <Reusable_Button
-                  children="Send"
+                  children={savingComment ? "Sending…" : "Send"}
                   leftIcon={<FiSend size={14} />}
                   variant="primary"
                   onClick={handleSendComment}
+                  disabled={!comment.trim() || savingComment}
                 />
-                {(statusUpper === "RESOLVED" || statusUpper === "CLOSED") && (
+                {showRateButton && (
                   <Reusable_Button
                     onClick={() => setRating(true)}
                     children="Rate Resolution"
@@ -569,7 +851,9 @@ const Ticket_Details = () => {
 
 const Field = ({ label, value }: { label: string; value: ReactNode }) => (
   <div>
-    <label className="text-xs text-gray-500 uppercase block mb-1">{label}</label>
+    <label className="text-xs text-gray-500 uppercase block mb-1">
+      {label}
+    </label>
     <p className="text-gray-900">{value}</p>
   </div>
 );
@@ -587,56 +871,5 @@ const InfoTile = ({ icon: Icon, bg, color, label, value }: any) => (
     </div>
   </div>
 );
-
-const AttachmentPreview = ({ url, name }: { url: string; name: string }) => {
-  const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  const isImage = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"].includes(ext);
-  const isVideo = ["mp4", "webm", "mov", "avi", "mkv"].includes(ext);
-  const isAudio = ["mp3", "wav", "ogg", "m4a", "aac"].includes(ext);
-  const isPdf = ext === "pdf";
-
-  return (
-    <div className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-gray-800 truncate">
-          <FiPaperclip size={14} className="text-blue-600 shrink-0" />
-          <span className="truncate">{name}</span>
-        </div>
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer"
-          download
-          className="text-xs text-blue-600 hover:underline shrink-0 ml-3"
-        >
-          Download
-        </a>
-      </div>
-
-      {isImage && (
-        <img src={url} alt={name} className="max-h-72 rounded-lg border border-gray-200 object-contain bg-white" />
-      )}
-      {isVideo && (
-        <video controls src={url} className="max-h-72 rounded-lg border border-gray-200 bg-black">
-          Your browser does not support video playback.
-        </video>
-      )}
-      {isAudio && (
-        <audio controls src={url} className="w-full">
-          Your browser does not support audio playback.
-        </audio>
-      )}
-      {isPdf && (
-        <iframe src={url} title={name} className="w-full h-72 rounded-lg border border-gray-200 bg-white" />
-      )}
-      {!isImage && !isVideo && !isAudio && !isPdf && (
-        <div className="flex items-center gap-2 text-sm text-gray-600 italic">
-          <FiFile size={14} />
-          Preview not available — use Download to view the file.
-        </div>
-      )}
-    </div>
-  );
-};
 
 export default Ticket_Details;

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { FaRegHourglassHalf } from "react-icons/fa6";
 import {
   FiArrowLeft, FiAward, FiCalendar, FiCheck, FiClock, FiInfo,
-  FiPause, FiPlay, FiPlusSquare, FiRefreshCcw, FiRepeat, FiTag,
+  FiPlusSquare,
+  FiRepeat, FiTag
 } from "react-icons/fi";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
@@ -10,7 +10,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import AttachmentsCard from "../../../component/attachments/AttachmentsCard";
 import Reusable_Button from "../../../component/button/Reusable_Button";
 import Loader from "../../../component/loader/Loader";
-import TemplatesSection from "../../../component/template/TemplatesSection";
 
 import {
   closeRequest,
@@ -51,22 +50,7 @@ const Investigation = () => {
 
   const [ticket, setTicket] = useState<Ticket | null>(cached ?? null);
   const [loading, setLoading] = useState(!cached);
-  const [investigationNote, setInvestigationNote] = useState("");
   const [comment, setComment] = useState("");
-  const [seconds, setSeconds] = useState(0);
-  const [running, setRunning] = useState(false);
-
-  /* timer tick */
-  useEffect(() => {
-    if (!running) return;
-    const iv = setInterval(() => setSeconds((s) => s + 1), 1000);
-    return () => clearInterval(iv);
-  }, [running]);
-
-  const fmtTimer = (s: number) =>
-    `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(
-      Math.floor((s % 3600) / 60)
-    ).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
   useEffect(() => {
     if (!id) return;
@@ -119,12 +103,6 @@ const Investigation = () => {
       alert(e?.message || "Failed to close request");
     }
   };
-
-  const appendToNote = (text: string) =>
-    setInvestigationNote((prev) => (prev ? `${prev}\n\n${text}` : text));
-
-  const appendToComment = (text: string) =>
-    setComment((prev) => (prev ? `${prev}\n\n${text}` : text));
 
   const isResolved = ticket.status?.toUpperCase() === "RESOLVED";
 
@@ -317,43 +295,6 @@ const Investigation = () => {
         </div>
       </div>
 
-      {/* Templates + Notes + Timer */}
-      <div className="bg-[#f8fafc] rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-8 p-5">
-        <TemplatesSection
-          onPickInvestigation={appendToNote}
-          onPickResponse={appendToComment}
-        />
-
-        <div className="mt-4">
-          <h3 className="font-bold text-gray-900 text-[15px] flex items-center gap-2 mb-3">
-            <FiPlusSquare className="text-black" /> Investigation Notes
-          </h3>
-          <textarea
-            value={investigationNote}
-            onChange={(e) => setInvestigationNote(e.target.value)}
-            placeholder="Add investigation note..."
-            className="w-full bg-white border border-black rounded-lg p-3 text-sm focus:outline-none focus:ring-1 focus:ring-black min-h-[60px] resize-none"
-          />
-        </div>
-
-        <div className="flex flex-col md:flex-row md:items-center gap-6 mt-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 font-bold text-gray-800 whitespace-nowrap">
-              <FaRegHourglassHalf size={16} /> Time Tracking:{" "}
-              <span className="text-blue-700">{fmtTimer(seconds)}</span>
-            </div>
-            <div className="flex gap-2">
-              <SmallButton icon={FiPlay} label="Start" onClick={() => setRunning(true)} />
-              <SmallButton icon={FiPause} label="Stop" onClick={() => setRunning(false)} />
-              <SmallButton
-                icon={FiRefreshCcw}
-                label="Reset"
-                onClick={() => { setRunning(false); setSeconds(0); }}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Comments */}
       <div className="mb-6">
@@ -403,24 +344,6 @@ const Field = ({ label, value }: { label: string; value: string }) => (
     <label className="text-xs text-gray-500 font-medium block mb-1">{label}</label>
     <p className="text-gray-900 text-sm">{value}</p>
   </div>
-);
-
-const SmallButton = ({
-  icon: Icon,
-  label,
-  onClick,
-}: {
-  icon: any;
-  label: string;
-  onClick?: () => void;
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="flex items-center gap-1.5 px-3 py-1 bg-white border border-gray-200 rounded-full text-sm hover:bg-gray-50 cursor-pointer"
-  >
-    <Icon size={12} /> {label}
-  </button>
 );
 
 export default Investigation;

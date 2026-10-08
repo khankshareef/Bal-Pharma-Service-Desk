@@ -10,45 +10,33 @@ export interface Ticket {
   status: string;
   slaStatus: string;
   closedAt?: string; 
-
   unitName?: string;
   address?: string;
-
   departmentId?: number;
   departmentName?: string;
-
   categoryId?: number;
   categoryName?: string;
-
   subCategoryId?: number;
   subCategoryName?: string;
-
   templateId?: number;
   templateName?: string;
-
   createdById?: number;
   createdByName?: string;
   createdByEmployeeId?: string;
-
   assignedToId?: number;
   assignedToName?: string;
   assignedToEmployeeId?: string;
   assignedAt?: string;
   autoAssigned?: boolean;
-
   attachmentUrl?: string;
   attachmentName?: string;
-
   attachmentUrls?: string;
   attachmentNames?: string;
-
   createdAt?: string;
   updatedAt?: string;
   resolvedAt?: string;
-
   resolutionNotes?: string;
   resolutionType?: string;
-
   reopenId?: number;
   reopenStatus?: string;
   reopenReason?: string;

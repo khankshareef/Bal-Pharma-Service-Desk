@@ -5,34 +5,44 @@ import { fileUrl } from "../../utils/fileUrl";
 import AttachmentPreview from "./AttachmentPreview";
 
 interface Props {
-  ticket: Pick<Ticket, "attachmentUrl" | "attachmentName" | "attachmentUrls" | "attachmentNames">;
+  ticket: Ticket;
   title?: string;
-  hideWhenEmpty?: boolean;
 }
 
-const AttachmentsCard = ({
-  ticket,
-  title = "Attachments",
-  hideWhenEmpty = false,
-}: Props) => {
-  const attachments = useMemo(() => {
+const AttachmentsCard = ({ ticket, title = "Attachments" }: Props) => {
+  const attachments: { url: string; name: string }[] = useMemo(() => {
+    if (!ticket) return [];
+
     if (ticket.attachmentUrls && ticket.attachmentUrls.trim().length > 0) {
-      const urls = ticket.attachmentUrls.split(",").map((u) => u.trim()).filter(Boolean);
-      const names = (ticket.attachmentNames ?? "").split(",").map((n) => n.trim());
-      return urls.map((u, i) => ({ url: u, name: names[i] || `File ${i + 1}` }));
+      const urls = ticket.attachmentUrls
+        .split(",")
+        .map((u) => u.trim())
+        .filter(Boolean);
+      const names = (ticket.attachmentNames ?? "")
+        .split(",")
+        .map((n) => n.trim());
+      return urls.map((u, i) => ({
+        url: fileUrl(u),
+        name: names[i] || `File ${i + 1}`,
+      }));
     }
+
     if (ticket.attachmentUrl) {
-      return [{ url: ticket.attachmentUrl, name: ticket.attachmentName ?? "Attachment" }];
+      return [
+        {
+          url: fileUrl(ticket.attachmentUrl),
+          name: ticket.attachmentName ?? "Attachment",
+        },
+      ];
     }
+
     return [];
   }, [ticket]);
 
-  if (hideWhenEmpty && attachments.length === 0) return null;
-
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-      <div className="px-6 py-4 border-b border-gray-100">
-        <h3 className="font-bold text-gray-900 text-[15px] flex items-center gap-2">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+        <h3 className="font-bold text-gray-800 text-[15px] flex items-center gap-2">
           <FiPaperclip className="text-blue-600" />
           {title}
           {attachments.length > 0 && (
@@ -46,11 +56,11 @@ const AttachmentsCard = ({
       <div className="p-6 space-y-4">
         {attachments.length === 0 ? (
           <p className="text-sm text-gray-500">
-            No files were attached to this ticket.
+            No files attached to this ticket.
           </p>
         ) : (
           attachments.map((a, i) => (
-            <AttachmentPreview key={i} url={fileUrl(a.url)} name={a.name} />
+            <AttachmentPreview key={i} url={a.url} name={a.name} />
           ))
         )}
       </div>

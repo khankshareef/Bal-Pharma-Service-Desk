@@ -7,9 +7,10 @@ import bal_pharma_limited_logo from "../../../assets/bal_pharma_limited_logo.jpg
 import Reusable_Button from "../../button/Reusable_Button";
 
 import type { AppDispatch, RootState } from "../../../store/store/Store";
+import { logout } from "../../../store/user/slice/Login_Slice";
 import {
-  fetchNotifications,
   markAllNotificationsRead,
+  markLiveNotificationRead,
   markNotificationRead,
   type Notification,
 } from "../../../store/user/slice/NotificationSlice";
@@ -26,30 +27,16 @@ const iconFor = (type: Notification["type"]) => {
 const Exicutive_Header = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
-
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
-
   const user = useSelector((s: any) => s.auth?.user ?? s.loginRoute?.user);
   const employeeId = user?.employeeId ?? "";
 
   const { items: notifications, unreadCount } = useSelector(
     (s: RootState) => s.notifications
   );
-
-  useEffect(() => {
-    if (!employeeId) return;
-    console.log(">>> Fetching notifications for", employeeId);
-    dispatch(fetchNotifications(employeeId));
-
-    const interval = setInterval(() => {
-      dispatch(fetchNotifications(employeeId));
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [dispatch, employeeId]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -62,9 +49,16 @@ const Exicutive_Header = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = () => navigate("/login");
+  const handleLogout = () => {
+    dispatch(logout());
+    navigate("/login");
+  };
 
   const handleMarkAsRead = (id: number) => {
+    if (id < 0) {
+      dispatch(markLiveNotificationRead(id));
+      return;
+    }
     if (employeeId) dispatch(markNotificationRead({ id, employeeId }));
   };
 

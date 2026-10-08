@@ -1,4 +1,5 @@
 import axios, {
+  type AxiosAdapter,
   type AxiosRequestConfig,
   type AxiosResponse,
 } from "axios";
@@ -51,6 +52,55 @@ const api = axios.create({
     "Content-Type": "application/json",
   },
 });
+
+const pendingGetRequests = new Map<string, Promise<AxiosResponse>>();
+const defaultAdapter = axios.getAdapter(api.defaults.adapter);
+
+api.defaults.adapter = ((config) => {
+  if (
+    config.method?.toLowerCase() !== "get" ||
+    config.signal ||
+    config.onDownloadProgress ||
+    config.onUploadProgress
+  ) {
+    return defaultAdapter(config);
+  }
+
+  const headers = config.headers.toJSON();
+  const requestKey = JSON.stringify({
+    url: api.getUri(config),
+    headers: Object.entries(headers)
+      .map(([name, value]) => [name.toLowerCase(), value] as const)
+      .sort(([left], [right]) => left.localeCompare(right)),
+    responseType: config.responseType,
+    timeout: config.timeout,
+    withCredentials: config.withCredentials,
+  });
+
+  const pendingRequest = pendingGetRequests.get(requestKey);
+  if (pendingRequest) {
+    return pendingRequest.then((response) => ({
+      ...response,
+      config,
+    }));
+  }
+
+  const request = defaultAdapter(config);
+  pendingGetRequests.set(requestKey, request);
+  void request.then(
+    () => {
+      if (pendingGetRequests.get(requestKey) === request) {
+        pendingGetRequests.delete(requestKey);
+      }
+    },
+    () => {
+      if (pendingGetRequests.get(requestKey) === request) {
+        pendingGetRequests.delete(requestKey);
+      }
+    }
+  );
+  return request;
+}) as AxiosAdapter;
 
 api.interceptors.request.use(
   async (config) => {

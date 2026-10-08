@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 
@@ -7,10 +7,10 @@ import Loader from "../../../component/loader/Loader";
 
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import {
-    fetchNotifications,
-    markAllNotificationsRead,
-    markNotificationRead,
-    type Notification as NotificationType,
+  markAllNotificationsRead,
+  markLiveNotificationRead,
+  markNotificationRead,
+  type Notification as NotificationType,
 } from "../../../store/user/slice/NotificationSlice";
 
 const iconFor = (type: NotificationType["type"]) => {
@@ -29,26 +29,55 @@ const User_Notification = () => {
   const user = useSelector((s: any) => s.auth?.user ?? s.loginRoute?.user);
   const employeeId = user?.employeeId ?? "";
 
-  const { items: notifications, unreadCount, loading } = useSelector(
-    (s: RootState) => s.notifications
+  const {
+    items: dbNotifications,
+    unreadCount,
+    loading,
+  } = useSelector((s: RootState) => s.notifications);
+
+  const liveNotifications = useSelector(
+    (s: RootState) => s.socket?.notifications ?? []
   );
 
   const [localLoading, setLocalLoading] = useState(false);
 
-  useEffect(() => {
-    if (!employeeId) return;
-    setLocalLoading(true);
-    dispatch(fetchNotifications(employeeId)).finally(() =>
-      setLocalLoading(false)
-    );
-  }, [dispatch, employeeId]);
+  const notifications: NotificationType[] = useMemo(() => {
+    const list: NotificationType[] = [...dbNotifications];
+    liveNotifications.forEach((n) => {
+      const exists = list.some(
+        (d) =>
+          d.title === n.title &&
+          d.message === n.message &&
+          (d.ticketId ?? null) === (n.ticketId ?? null)
+      );
+      if (!exists) {
+        list.unshift({
+          id: -Math.abs(hashCode(n.id)),
+          title: n.title,
+          message: n.message,
+          type: "INFO",
+          ticketId: n.ticketId ?? null,
+          ticketCode: null,
+          isRead: false,
+          createdAt: n.createdAt,
+        });
+      }
+    });
+
+    return list;
+  }, [dbNotifications, liveNotifications]);
 
   const handleMarkAsRead = async (id: number) => {
     if (!employeeId) return;
+    if (id < 0) {
+      dispatch(markLiveNotificationRead(id));
+      return;
+    }
     try {
       setLocalLoading(true);
       await dispatch(markNotificationRead({ id, employeeId })).unwrap();
     } catch {
+      /* ignore */
     } finally {
       setLocalLoading(false);
     }
@@ -66,10 +95,9 @@ const User_Notification = () => {
 
   const handleClick = (notif: NotificationType) => {
     if (!notif.isRead) handleMarkAsRead(notif.id);
-
     const ticketId = notif.ticketId ?? null;
     if (ticketId) {
-      navigate(`../my-tickets/tkt-details/${ticketId}`); 
+      navigate(`../my-tickets/tkt-details/${ticketId}`);
     }
   };
 
@@ -162,17 +190,6 @@ const User_Notification = () => {
                       {new Date(notif.createdAt).toLocaleString()}
                     </p>
                   </div>
-
-                  {/* <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(notif.id);
-                    }}
-                    className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                    title="Delete"
-                  >
-                    <FiTrash2 size={16} />
-                  </button> */}
                 </div>
               </div>
             ))}
@@ -182,5 +199,13 @@ const User_Notification = () => {
     </div>
   );
 };
+
+function hashCode(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  return h;
+}
 
 export default User_Notification;

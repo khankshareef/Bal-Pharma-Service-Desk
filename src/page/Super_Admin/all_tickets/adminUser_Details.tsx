@@ -4,7 +4,7 @@ import {
   FiCheck,
   FiEdit,
   FiKey,
-  FiUserX
+  FiUserX,
 } from "react-icons/fi";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
@@ -71,8 +71,20 @@ const AdminUser_Details = () => {
   const [user, setUser] = useState<User | null>(cached ?? null);
   const [loading, setLoading] = useState(!cached);
 
-const UserRole = user ? humanizeRole(user.role) : "N/A";
+  const UserRole = useMemo(() => {
+    if (!user) return "N/A";
+    const list =
+      Array.isArray((user as any).roles) && (user as any).roles.length > 0
+        ? (user as any).roles
+        : (user as any).role
+        ? [(user as any).role]
+        : [];
+    if (list.length === 0) return "N/A";
+    return list.map((r: string) => humanizeRole(r)).join(", ");
+  }, [user]);
 
+  const unitCount = user?.allowedLocations?.length ?? 0;
+  const isActive = user?.status === "ACTIVE";
 
   useEffect(() => {
     if (!id) return;
@@ -122,7 +134,12 @@ const UserRole = user ? humanizeRole(user.role) : "N/A";
     const nextStatus = user.status === "ACTIVE" ? "CLOSED" : "ACTIVE";
     const label = nextStatus === "ACTIVE" ? "activate" : "deactivate";
 
-    if (!confirm(`${label[0].toUpperCase() + label.slice(1)} ${user.name}?`)) return;
+    if (
+      !confirm(
+        `${label[0].toUpperCase() + label.slice(1)} ${user.name}?`
+      )
+    )
+      return;
 
     try {
       const updated = await dispatch(
@@ -153,8 +170,6 @@ const UserRole = user ? humanizeRole(user.role) : "N/A";
       primary.address ? ` - ${primary.address}` : ""
     }${primary.portCode ? ` (${primary.portCode})` : ""}`;
   }, [user]);
-
-  const isActive = user?.status === "ACTIVE";
 
   if (loading) return <Loader />;
 
@@ -188,10 +203,8 @@ const UserRole = user ? humanizeRole(user.role) : "N/A";
           <div>
             <h2 className="text-lg font-bold text-gray-900">{user.name}</h2>
             <p className="text-sm text-gray-500 mt-0.5">
-              {user.employeeId} · {humanizeRole(user.role)} · {user.department}
-              {user.allowedLocations?.length > 1
-                ? ` · ${user.allowedLocations.length} Units`
-                : ""}
+              {user.employeeId} · {UserRole} · {user.department}
+              {unitCount > 1 ? ` · ${unitCount} Units` : ""}
             </p>
           </div>
         </div>
@@ -237,9 +250,7 @@ const UserRole = user ? humanizeRole(user.role) : "N/A";
 
           <div>
             <p className="text-xs text-gray-500 mb-1">Role</p>
-            <p className="text-[15px] text-gray-900 font-medium">
-              {UserRole}
-            </p>
+            <p className="text-[15px] text-gray-900 font-medium">{UserRole}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 mb-1">Department</p>
@@ -247,6 +258,7 @@ const UserRole = user ? humanizeRole(user.role) : "N/A";
               {user.department || "N/A"}
             </p>
           </div>
+
           <div>
             <p className="text-xs text-gray-500 mb-2">Status</p>
             <span
@@ -262,10 +274,10 @@ const UserRole = user ? humanizeRole(user.role) : "N/A";
 
           <div className="md:col-span-2">
             <p className="text-xs text-gray-500 mb-2">
-              Assigned Unit{user.allowedLocations?.length > 1 ? "s" : ""}
+              Assigned Unit{unitCount > 1 ? "s" : ""}
             </p>
             <div className="flex flex-wrap gap-2">
-              {user.allowedLocations?.length > 0 ? (
+              {unitCount > 0 ? (
                 user.allowedLocations.map((u) => (
                   <span
                     key={u.unitCode}

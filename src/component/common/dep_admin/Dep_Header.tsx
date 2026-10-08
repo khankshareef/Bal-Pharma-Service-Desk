@@ -7,9 +7,10 @@ import bal_pharma_limited_logo from "../../../assets/bal_pharma_limited_logo.jpg
 import Reusable_Button from "../../button/Reusable_Button";
 
 import type { AppDispatch, RootState } from "../../../store/store/Store";
+import { logout } from "../../../store/user/slice/Login_Slice";
 import {
-  fetchNotifications,
   markAllNotificationsRead,
+  markLiveNotificationRead,
   markNotificationRead,
   type Notification,
 } from "../../../store/user/slice/NotificationSlice";
@@ -107,18 +108,6 @@ const Dep_Header = () => {
   );
 
   useEffect(() => {
-    if (!employeeId) return;
-
-    dispatch(fetchNotifications(employeeId));
-
-    const interval = setInterval(() => {
-      dispatch(fetchNotifications(employeeId));
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [dispatch, employeeId]);
-
-  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
         dropdownRef.current &&
@@ -139,10 +128,15 @@ const Dep_Header = () => {
   }, []);
 
   const handleLogout = () => {
+    dispatch(logout());
     navigate("/login");
   };
 
   const handleMarkAsRead = (id: number) => {
+    if (id < 0) {
+      dispatch(markLiveNotificationRead(id));
+      return;
+    }
     if (employeeId) dispatch(markNotificationRead({ id, employeeId }));
   };
 

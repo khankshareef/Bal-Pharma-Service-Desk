@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 
@@ -7,10 +7,10 @@ import Loader from "../../../component/loader/Loader";
 
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import {
-    fetchNotifications,
-    markAllNotificationsRead,
-    markNotificationRead,
-    type Notification as NotificationType,
+  markAllNotificationsRead,
+  markLiveNotificationRead,
+  markNotificationRead,
+  type Notification as NotificationType,
 } from "../../../store/user/slice/NotificationSlice";
 
 const iconFor = (type: NotificationType["type"]) => {
@@ -40,6 +40,14 @@ const ticketDetailPathFor = (role?: string, ticketId?: number | null) => {
   }
 };
 
+function hashCode(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  return h;
+}
+
 const Notification_Page = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
@@ -48,22 +56,51 @@ const Notification_Page = () => {
   const employeeId = user?.employeeId ?? "";
   const role: string = user?.role ?? "";
 
-  const { items: notifications, unreadCount, loading } = useSelector(
-    (s: RootState) => s.notifications
+  const {
+    items: dbNotifications,
+    unreadCount,
+    loading,
+  } = useSelector((s: RootState) => s.notifications);
+
+  const liveNotifications = useSelector(
+    (s: RootState) => s.socket?.notifications ?? []
   );
 
   const [localLoading, setLocalLoading] = useState(false);
 
-  useEffect(() => {
-    if (!employeeId) return;
-    setLocalLoading(true);
-    dispatch(fetchNotifications(employeeId)).finally(() =>
-      setLocalLoading(false)
-    );
-  }, [dispatch, employeeId]);
+  const notifications: NotificationType[] = useMemo(() => {
+    const list: NotificationType[] = [...dbNotifications];
+
+    liveNotifications.forEach((n) => {
+      const exists = list.some(
+        (d) =>
+          d.title === n.title &&
+          d.message === n.message &&
+          (d.ticketId ?? null) === (n.ticketId ?? null)
+      );
+      if (!exists) {
+        list.unshift({
+          id: -Math.abs(hashCode(n.id)),
+          title: n.title,
+          message: n.message,
+          type: "INFO",
+          ticketId: n.ticketId ?? null,
+          ticketCode: null,
+          isRead: false,
+          createdAt: n.createdAt,
+        });
+      }
+    });
+
+    return list;
+  }, [dbNotifications, liveNotifications]);
 
   const handleMarkAsRead = async (id: number) => {
     if (!employeeId) return;
+    if (id < 0) {
+      dispatch(markLiveNotificationRead(id));
+      return;
+    }
     try {
       setLocalLoading(true);
       await dispatch(markNotificationRead({ id, employeeId })).unwrap();
@@ -84,10 +121,8 @@ const Notification_Page = () => {
   };
 
   const handleClick = (notif: NotificationType) => {
-    // mark as read first (fire and forget)
     if (!notif.isRead) handleMarkAsRead(notif.id);
 
-    // then navigate to the ticket if we can
     const path = ticketDetailPathFor(role, notif.ticketId ?? null);
     if (path) {
       navigate(path);
@@ -98,7 +133,6 @@ const Notification_Page = () => {
 
   return (
     <div className="max-w-full mx-auto font-sans relative">
-      {/* top-level loader overlay while mutating */}
       {localLoading && (
         <div className="fixed inset-0 z-40 bg-white/60 backdrop-blur-sm flex items-center justify-center">
           <Loader />
@@ -184,17 +218,6 @@ const Notification_Page = () => {
                       {new Date(notif.createdAt).toLocaleString()}
                     </p>
                   </div>
-
-                  {/* <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(notif.id);
-                    }}
-                    className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                    title="Delete"
-                  >
-                    <FiTrash2 size={16} />
-                  </button> */}
                 </div>
               </div>
             ))}
