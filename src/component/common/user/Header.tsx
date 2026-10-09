@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FiBell, FiChevronDown, FiLogOut, FiUser } from "react-icons/fi";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
@@ -105,9 +105,50 @@ const Header = () => {
 
   console.log("User Role Find",user)
 
-  const { items: notifications, unreadCount } = useSelector(
-    (s: RootState) => s.notifications
-  );
+const { items: dbNotifications } = useSelector(
+  (s: RootState) => s.notifications
+);
+
+const liveNotifications = useSelector(
+  (s: RootState) => s.socket?.notifications ?? []
+);
+
+function hashCode(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return h;
+}
+
+const notifications = useMemo(() => {
+  const seen = new Set<string>();
+  const merged: Notification[] = [];
+
+  for (const n of liveNotifications) {
+    const key = String(n.id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push({
+      id: typeof n.id === "number" ? n.id : -Math.abs(hashCode(String(n.id))),
+      title: n.title,
+      message: n.message,
+      type: "INFO",
+      ticketId: n.ticketId ?? null,
+      isRead: n.read ?? false,
+      createdAt: n.createdAt,
+    } as Notification);
+  }
+
+  for (const d of dbNotifications) {
+    const key = String(d.id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(d);
+  }
+
+  return merged;
+}, [dbNotifications, liveNotifications]);
+
+const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

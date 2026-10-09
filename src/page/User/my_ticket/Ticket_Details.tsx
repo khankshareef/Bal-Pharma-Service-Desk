@@ -18,10 +18,13 @@ import Reusable_Field from "../../../component/fields/Reusable_Field";
 import Loader from "../../../component/loader/Loader";
 import ReusablePopup from "../../../component/popups/Reusable_Popup";
 import Rating_Model from "../../../component/Rating_Model/Rating_Model";
+import { getSocket } from "../../../service/socket";
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import {
   addComment,
   fetchComments,
+  receiveComment,
+  type Comment,
 } from "../../../store/user/slice/commentSlice";
 import {
   createRating,
@@ -171,6 +174,45 @@ const Ticket_Details = () => {
   useEffect(() => {
     if (!ticketId || Number.isNaN(ticketId)) return;
     dispatch(fetchComments(ticketId));
+  }, [ticketId, dispatch]);
+
+  useEffect(() => {
+    if (!ticketId || Number.isNaN(ticketId)) return;
+
+    const sock = getSocket();
+    if (!sock) return;
+
+    const onComment = (payload: any) => {
+      const raw = payload?.comment ?? payload;
+      const incomingTicketId = Number(
+        payload?.ticketId ??
+          payload?.ticket_id ??
+          raw?.ticketId ??
+          raw?.ticket_id
+      );
+
+      if (incomingTicketId !== ticketId) return;
+
+      if (!raw?.id) return;
+
+      const c: Comment = {
+        id: raw.id,
+        ticketId: incomingTicketId,
+        authorId: raw.authorId,
+        authorName: raw.authorName,
+        authorInitials: raw.authorInitials ?? "?",
+        body: raw.body,
+        createdAt: raw.createdAt,
+      };
+
+      dispatch(receiveComment(c));
+    };
+
+    sock.on("ticket:comment", onComment);
+
+    return () => {
+      sock.off("ticket:comment", onComment);
+    };
   }, [ticketId, dispatch]);
 
   useEffect(() => {
@@ -715,7 +757,6 @@ const Ticket_Details = () => {
           </div>
         </div>
 
-        {/* Right column — Comments */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-xl border border-gray-200 sticky top-6 flex flex-col max-h-[calc(100vh-3rem)]">
             <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
