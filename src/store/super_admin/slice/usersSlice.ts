@@ -14,7 +14,7 @@ export interface User {
   id: number;
   employeeId: string;
   name: string;
-  role: "EMPLOYEE" | "EXECUTIVE" | "DEPUTY_MANAGER" | "SUPER_MANAGER" | "ADMIN";
+  roles: "EMPLOYEE" | "EXECUTIVE" | "DEPUTY_MANAGER" | "SUPER_MANAGER" | "ADMIN";
   status: "ACTIVE" | "CLOSED" | "SUSPENDED";
   firstTimeLogin: boolean;
   department: string;

@@ -9,7 +9,7 @@ export interface Ticket {
   priority: string;
   status: string;
   slaStatus: string;
-  closedAt?: string; 
+  closedAt?: string;
   unitName?: string;
   address?: string;
   departmentId?: number;
@@ -102,13 +102,13 @@ export interface TicketComment {
 
 export interface RatingPayload {
   ticketId: number;
-  rating: number;         
+  rating: number;
   comment?: string;
 }
 
 interface TicketsState {
-  tickets: Ticket[];         
-  myTickets: Ticket[];      
+  tickets: Ticket[];
+  myTickets: Ticket[];
   selectedTicket: Ticket | null;
   comments: TicketComment[];
   stats: TicketStats | null;
@@ -116,7 +116,7 @@ interface TicketsState {
   saving: boolean;
   uploading: boolean;
   error: any;
-   allTickets: Ticket[];
+  allTickets: Ticket[];
   unassignedTickets: Ticket[];
   assignedTickets: Ticket[];
 }
@@ -131,7 +131,7 @@ const initialState: TicketsState = {
   saving: false,
   uploading: false,
   error: null,
-  allTickets:[],
+  allTickets: [],
   unassignedTickets: [],
   assignedTickets: [],
 };
@@ -231,7 +231,6 @@ export const updateTicket = createAsyncThunk<
   }
 });
 
-
 export const updateTicketStatus = createAsyncThunk<
   Ticket,
   { id: number; employeeId: string } & UpdateTicketStatusPayload,
@@ -263,7 +262,6 @@ export const deleteTicket = createAsyncThunk<number, number, { rejectValue: any 
   }
 );
 
-
 export const uploadTicketFile = createAsyncThunk<
   { url: string; name: string },
   File,
@@ -283,7 +281,6 @@ export const uploadTicketFile = createAsyncThunk<
     return rejectWithValue(e.response?.data ?? e.message);
   }
 });
-
 
 export const fetchComments = createAsyncThunk<
   TicketComment[],
@@ -318,11 +315,10 @@ export const addComment = createAsyncThunk<
   }
 );
 
-
 export const rateTicket = createAsyncThunk<
   { success: boolean },
   RatingPayload,
-  { rejectValue: any}
+  { rejectValue: any }
 >("tickets/rate", async ({ ticketId, rating, comment }, { rejectWithValue }) => {
   try {
     const res = await api.post(`/tickets/${ticketId}/rate`, { rating, comment });
@@ -332,14 +328,31 @@ export const rateTicket = createAsyncThunk<
   }
 });
 
-
 export const fetchUnassignedTickets = createAsyncThunk<
+  Ticket[],
+  string,                       // employeeId (required)
+  { rejectValue: any }
+>(
+  "tickets/fetchUnassigned",
+  async (employeeId, { rejectWithValue }) => {
+    try {
+      const res = await api.get<Ticket[]>(
+        `/tickets/unassigned?employeeId=${encodeURIComponent(employeeId)}`
+      );
+      return res.data;
+    } catch (e: any) {
+      return rejectWithValue(e.response?.data ?? e.message);
+    }
+  }
+);
+
+export const fetchAllUnassignedTickets = createAsyncThunk<
   Ticket[],
   void,
   { rejectValue: any }
->("tickets/fetchUnassigned", async (_, { rejectWithValue }) => {
+>("tickets/fetchAllUnassigned", async (_, { rejectWithValue }) => {
   try {
-    const res = await api.get<Ticket[]>("/tickets/unassigned");
+    const res = await api.get<Ticket[]>("/tickets/unassigned/all");
     return res.data;
   } catch (e: any) {
     return rejectWithValue(e.response?.data ?? e.message);
@@ -391,7 +404,6 @@ const ticketsSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-
       .addCase(fetchTickets.pending, (s) => {
         s.loading = true;
         s.error = null;
@@ -406,17 +418,17 @@ const ticketsSlice = createSlice({
       })
 
       .addCase(fetchAllTickets.pending, (s) => {
-  s.loading = true;
-  s.error = null;
-})
-.addCase(fetchAllTickets.fulfilled, (s, a) => {
-  s.loading = false;
-  s.tickets = a.payload;       
-})
-.addCase(fetchAllTickets.rejected, (s, a: any) => {
-  s.loading = false;
-  s.error = a.payload;
-})
+        s.loading = true;
+        s.error = null;
+      })
+      .addCase(fetchAllTickets.fulfilled, (s, a) => {
+        s.loading = false;
+        s.tickets = a.payload;
+      })
+      .addCase(fetchAllTickets.rejected, (s, a: any) => {
+        s.loading = false;
+        s.error = a.payload;
+      })
 
       .addCase(fetchMyTickets.pending, (s) => {
         s.loading = true;
@@ -518,18 +530,23 @@ const ticketsSlice = createSlice({
         s.error = a.payload;
       })
 
-.addCase(fetchUnassignedTickets.fulfilled, (s, a) => {
-  s.unassignedTickets = a.payload;
-})
-.addCase(fetchAssignedToExecutive.fulfilled, (s, a) => {
-  s.assignedTickets = a.payload;
-})
-.addCase(assignTicket.fulfilled, (s, a) => {
-  s.unassignedTickets = s.unassignedTickets.filter((t) => t.id !== a.payload.id);
-  s.assignedTickets.unshift(a.payload);
-  const i = s.tickets.findIndex((t) => t.id === a.payload.id);
-  if (i >= 0) s.tickets[i] = a.payload;
-});
+      .addCase(fetchUnassignedTickets.fulfilled, (s, a) => {
+        s.unassignedTickets = a.payload;
+      })
+      .addCase(fetchAllUnassignedTickets.fulfilled, (s, a) => {
+        s.unassignedTickets = a.payload;
+      })
+      .addCase(fetchAssignedToExecutive.fulfilled, (s, a) => {
+        s.assignedTickets = a.payload;
+      })
+      .addCase(assignTicket.fulfilled, (s, a) => {
+        s.unassignedTickets = s.unassignedTickets.filter(
+          (t) => t.id !== a.payload.id
+        );
+        s.assignedTickets.unshift(a.payload);
+        const i = s.tickets.findIndex((t) => t.id === a.payload.id);
+        if (i >= 0) s.tickets[i] = a.payload;
+      });
   },
 });
 

@@ -6,14 +6,14 @@ import { useNavigate } from "react-router-dom";
 import Loader from "../../../component/loader/Loader";
 import ReusablePopup from "../../../component/popups/Reusable_Popup";
 import Reusable_Table, {
-    type TableColumn,
+  type TableColumn,
 } from "../../../component/table/Reusable_Table";
 
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import {
-    assignTicket,
-    fetchUnassignedTickets,
-    type Ticket,
+  assignTicket,
+  fetchUnassignedTickets,
+  type Ticket,
 } from "../../../store/user/slice/TicketsSlice";
 
 interface TicketRow {
@@ -68,9 +68,10 @@ const Open_Queue = () => {
     message: "",
   });
 
-  useEffect(() => {
-    dispatch(fetchUnassignedTickets());
-  }, [dispatch]);
+useEffect(() => {
+  if (!employeeId) return;
+  dispatch(fetchUnassignedTickets(employeeId));
+}, [employeeId, dispatch]);
 
   const rows: TicketRow[] = useMemo(
     () =>
@@ -133,7 +134,7 @@ const Open_Queue = () => {
           `Ticket ${res.ticketCode} is now IN PROGRESS and assigned to you.`,
       });
 
-      dispatch(fetchUnassignedTickets());
+      dispatch(fetchUnassignedTickets(employeeId));
     } catch (err: any) {
       setPopup({
         isOpen: true,

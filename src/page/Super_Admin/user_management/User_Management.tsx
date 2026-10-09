@@ -49,7 +49,6 @@ const User_Management = () => {
   const navigate = useNavigate();
 
   const { users, stats, loading } = useSelector((s: RootState) => s.users);
-
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedUsers, setSelectedUsers] = useState<UserRow[]>([]);
 
@@ -64,7 +63,9 @@ const User_Management = () => {
         id: u.id,
         EmployeeID: u.employeeId,
         Name: u.name,
-        Role: humanizeRole(u.role),
+         Role: Array.isArray(u.roles)
+        ? u.roles.map((role) => humanizeRole(role)).join(", ")
+        : "No Role",
         Department: u.department,
         Status: u.status === "ACTIVE" ? "Active" : "Inactive",
         LastLogin: u.lastLoginAt
