@@ -10,10 +10,15 @@ import type { AppDispatch, RootState } from "../../../store/store/Store";
 import { logout } from "../../../store/user/slice/Login_Slice";
 import {
   markAllNotificationsRead,
-  markLiveNotificationRead,
   markNotificationRead,
   type Notification,
 } from "../../../store/user/slice/NotificationSlice";
+import {
+  markAllRead as markAllLiveRead,
+  markRead as markLiveRead,
+} from "../../../store/user/slice/socketSlice";
+
+type MergedNotification = Notification & { _liveId?: string };
 
 const iconFor = (type: Notification["type"]) => {
   switch (type) {
@@ -24,70 +29,97 @@ const iconFor = (type: Notification["type"]) => {
   }
 };
 
-const Exicutive_Header = () => {
-  const navigate = useNavigate();
-  const dispatch = useDispatch<AppDispatch>();
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const notificationRef = useRef<HTMLDivElement>(null);
-  const user = useSelector((s: any) => s.auth?.user ?? s.loginRoute?.user);
-  const employeeId = user?.employeeId ?? "";
-
-const { items: dbNotifications } = useSelector(
-  (s: RootState) => s.notifications
-);
-
-const liveNotifications = useSelector(
-  (s: RootState) => s.socket?.notifications ?? []
-);
-
 function hashCode(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
   return h;
 }
 
-const notifications = useMemo(() => {
-  const seen = new Set<string>();
-  const merged: Notification[] = [];
+const Exicutive_Header = () => {
+  const navigate = useNavigate();
+  const dispatch = useDispatch<AppDispatch>();
 
-  for (const n of liveNotifications) {
-    const key = String(n.id);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push({
-      id: typeof n.id === "number" ? n.id : -Math.abs(hashCode(String(n.id))),
-      title: n.title,
-      message: n.message,
-      type: "INFO",
-      ticketId: n.ticketId ?? null,
-      isRead: n.read ?? false,
-      createdAt: n.createdAt,
-    } as Notification);
-  }
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
-  for (const d of dbNotifications) {
-    const key = String(d.id);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(d);
-  }
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
 
-  return merged;
-}, [dbNotifications, liveNotifications]);
+  const user = useSelector((s: any) => s.auth?.user ?? s.loginRoute?.user);
+  const employeeId = user?.employeeId ?? "";
 
-const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const dbNotifications = useSelector(
+    (s: RootState) => s.notifications.items
+  );
+
+  const liveNotifications = useSelector(
+    (s: RootState) => s.socket?.notifications ?? []
+  );
+
+  const notifications: MergedNotification[] = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: MergedNotification[] = [];
+
+    // live first
+    for (const n of liveNotifications) {
+      const key = `live:${String(n.id)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push({
+        id: -Math.abs(hashCode(String(n.id))),
+        title: n.title,
+        message: n.message,
+        type: "INFO",
+        ticketId: n.ticketId ?? null,
+        ticketCode: null,
+        isRead: n.read ?? false,
+        createdAt: n.createdAt,
+        _liveId: String(n.id),
+      } as MergedNotification);
+    }
+
+    for (const d of dbNotifications) {
+      const dupeOfLive = merged.some(
+        (m) =>
+          m._liveId &&
+          m.title === d.title &&
+          m.message === d.message &&
+          (m.ticketId ?? null) === (d.ticketId ?? null)
+      );
+      if (dupeOfLive) continue;
+
+      const key = `db:${String(d.id)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push({ ...d, _liveId: undefined });
+    }
+
+    merged.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    return merged;
+  }, [dbNotifications, liveNotifications]);
+
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node))
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      )
         setIsProfileOpen(false);
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node))
+      if (
+        notificationRef.current &&
+        !notificationRef.current.contains(event.target as Node)
+      )
         setIsNotificationOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () =>
+      document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const handleLogout = () => {
@@ -95,19 +127,22 @@ const unreadCount = notifications.filter((n) => !n.isRead).length;
     navigate("/login");
   };
 
-  const handleMarkAsRead = (id: number) => {
-    if (id < 0) {
-      dispatch(markLiveNotificationRead(id));
+  const handleMarkAsRead = (notif: MergedNotification) => {
+    if (notif._liveId) {
+      dispatch(markLiveRead(notif._liveId));
       return;
     }
-    if (employeeId) dispatch(markNotificationRead({ id, employeeId }));
+    if (employeeId) {
+      dispatch(markNotificationRead({ id: notif.id, employeeId }));
+    }
   };
 
   const handleMarkAllRead = () => {
     if (employeeId) dispatch(markAllNotificationsRead(employeeId));
+    dispatch(markAllLiveRead());
   };
 
-  const goToTicket = (notif: Notification) => {
+  const goToTicket = (notif: MergedNotification) => {
     if (notif.ticketId) {
       navigate(`/executive/assigned/assigned-details/${notif.ticketId}`);
     }
@@ -117,7 +152,12 @@ const unreadCount = notifications.filter((n) => !n.isRead).length;
   const initials =
     user?.initials ||
     (user?.name
-      ? user.name.split(" ").map((n: string) => n.charAt(0)).slice(0, 2).join("").toUpperCase()
+      ? user.name
+          .split(" ")
+          .map((n: string) => n.charAt(0))
+          .slice(0, 2)
+          .join("")
+          .toUpperCase()
       : "NA");
 
   return (
@@ -127,11 +167,19 @@ const unreadCount = notifications.filter((n) => !n.isRead).length;
           onClick={() => navigate("/executive/dashboard")}
           className="w-12 h-12 rounded-lg flex items-center justify-center cursor-pointer overflow-hidden"
         >
-          <img src={bal_pharma_limited_logo} alt="Bal Pharma Limited" className="w-full h-full object-cover" />
+          <img
+            src={bal_pharma_limited_logo}
+            alt="Bal Pharma Limited"
+            className="w-full h-full object-cover"
+          />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-gray-800 tracking-tight">Executive</h1>
-          <p className="text-xs text-gray-500 font-medium">Bal Pharma Limited</p>
+          <h1 className="text-xl font-bold text-gray-800 tracking-tight">
+            Executive
+          </h1>
+          <p className="text-xs text-gray-500 font-medium">
+            Bal Pharma Limited
+          </p>
         </div>
       </div>
 
@@ -140,7 +188,9 @@ const unreadCount = notifications.filter((n) => !n.isRead).length;
           <button
             onClick={() => setIsNotificationOpen(!isNotificationOpen)}
             className={`relative p-2 rounded-full transition-colors focus:outline-none cursor-pointer ${
-              isNotificationOpen ? "bg-blue-50 text-[#003D8C]" : "text-gray-500 hover:bg-gray-100"
+              isNotificationOpen
+                ? "bg-blue-50 text-[#003D8C]"
+                : "text-gray-500 hover:bg-gray-100"
             }`}
           >
             <FiBell size={20} />
@@ -155,12 +205,19 @@ const unreadCount = notifications.filter((n) => !n.isRead).length;
             <div className="absolute right-[-60px] md:right-0 mt-3 w-[380px] bg-white rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] border border-gray-100 flex flex-col z-[1000]">
               <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-[#F8FAFC] rounded-t-xl">
                 <div>
-                  <h3 className="text-base font-bold text-gray-900">Notifications</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">You have {unreadCount} unread</p>
+                  <h3 className="text-base font-bold text-gray-900">
+                    Notifications
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    You have {unreadCount} unread
+                  </p>
                 </div>
                 <div className="flex items-center gap-3">
                   {unreadCount > 0 && (
-                    <button onClick={handleMarkAllRead} className="text-xs text-blue-600 hover:underline font-medium">
+                    <button
+                      onClick={handleMarkAllRead}
+                      className="text-xs text-blue-600 hover:underline font-medium"
+                    >
                       Mark all read
                     </button>
                   )}
@@ -180,26 +237,36 @@ const unreadCount = notifications.filter((n) => !n.isRead).length;
                 {notifications.length > 0 ? (
                   notifications.slice(0, 6).map((notif) => (
                     <div
-                      key={notif.id}
+                      key={`${notif.id}-${notif._liveId ?? "db"}`}
                       onClick={() => {
-                        handleMarkAsRead(notif.id);
+                        if (!notif.isRead) handleMarkAsRead(notif);
                         goToTicket(notif);
                       }}
                       className={`relative flex flex-col p-3 pl-4 rounded-xl transition-all cursor-pointer border border-transparent ${
-                        !notif.isRead ? "bg-[#F0F6FF] hover:bg-[#e4effc]" : "bg-white hover:bg-gray-50 border-gray-100"
+                        !notif.isRead
+                          ? "bg-[#F0F6FF] hover:bg-[#e4effc]"
+                          : "bg-white hover:bg-gray-50 border-gray-100"
                       }`}
                     >
                       {!notif.isRead && (
                         <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#003D8C] rounded-l-xl" />
                       )}
                       <div className="flex items-center gap-2 mb-1">
-                        {!notif.isRead && <div className="w-2 h-2 bg-[#003D8C] rounded-full mr-1 shrink-0" />}
+                        {!notif.isRead && (
+                          <div className="w-2 h-2 bg-[#003D8C] rounded-full mr-1 shrink-0" />
+                        )}
                         <span>{iconFor(notif.type)}</span>
-                        <h2 className={`font-bold text-sm ${notif.isRead ? "text-gray-600" : "text-black"}`}>
+                        <h2
+                          className={`font-bold text-sm ${
+                            notif.isRead ? "text-gray-600" : "text-black"
+                          }`}
+                        >
                           {notif.title}
                         </h2>
                       </div>
-                      <p className="text-xs text-gray-500 ml-6">{notif.message}</p>
+                      <p className="text-xs text-gray-500 ml-6">
+                        {notif.message}
+                      </p>
                       {notif.ticketCode && (
                         <p className="text-[11px] text-blue-600 ml-6 mt-1 font-medium">
                           Ticket: {notif.ticketCode}
@@ -231,18 +298,30 @@ const unreadCount = notifications.filter((n) => !n.isRead).length;
               {initials}
             </div>
             <div className="hidden md:flex flex-col items-start min-w-0 max-w-[180px]">
-              <span className="text-sm font-bold text-gray-700 leading-none">Executive</span>
-              <h2 className="text-xs text-gray-900 truncate w-full" title={user?.name || "N/A"}>
+              <span className="text-sm font-bold text-gray-700 leading-none">
+                Executive
+              </span>
+              <h2
+                className="text-xs text-gray-900 truncate w-full"
+                title={user?.name || "N/A"}
+              >
                 {user?.name || "N/A"}
               </h2>
             </div>
-            <FiChevronDown className={`text-gray-400 flex-shrink-0 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`} />
+            <FiChevronDown
+              className={`text-gray-400 flex-shrink-0 transition-transform duration-200 ${
+                isProfileOpen ? "rotate-180" : ""
+              }`}
+            />
           </button>
 
           {isProfileOpen && (
             <div className="absolute right-0 mt-3 w-max min-w-56 max-w-[300px] bg-white rounded-xl shadow-lg border border-gray-100 py-2 flex flex-col z-50">
               <button
-                onClick={() => { navigate("executive-profile"); setIsProfileOpen(false); }}
+                onClick={() => {
+                  navigate("executive-profile");
+                  setIsProfileOpen(false);
+                }}
                 className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-indigo-50 hover:text-[#003D8C] transition-colors cursor-pointer whitespace-nowrap"
               >
                 <FiUser size={18} /> View Profile

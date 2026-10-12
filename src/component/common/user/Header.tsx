@@ -2,29 +2,26 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FiBell, FiChevronDown, FiLogOut, FiUser } from "react-icons/fi";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
+
 import bal_pharma_limited_logo from "../../../assets/bal_pharma_limited_logo.jpg";
+import Reusable_Button from "../../button/Reusable_Button";
+
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import { logout } from "../../../store/user/slice/Login_Slice";
 import {
   markAllNotificationsRead,
-  markLiveNotificationRead,
   markNotificationRead,
   type Notification,
 } from "../../../store/user/slice/NotificationSlice";
-import Reusable_Button from "../../button/Reusable_Button";
+import {
+  markAllRead as markAllLiveRead,
+  markRead as markLiveRead,
+} from "../../../store/user/slice/socketSlice";
 
 const WarningIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="#F59E0B"
-    stroke="#F59E0B"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+    viewBox="0 0 24 24" fill="#F59E0B" stroke="#F59E0B" strokeWidth="2"
+    strokeLinecap="round" strokeLinejoin="round">
     <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
     <line x1="12" x2="12" y1="9" y2="13" stroke="white" />
     <line x1="12" x2="12.01" y1="17" y2="17" stroke="white" />
@@ -32,13 +29,8 @@ const WarningIcon = () => (
 );
 
 const InfoIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="#003D8C"
-  >
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+    viewBox="0 0 24 24" fill="#003D8C">
     <circle cx="12" cy="12" r="10" />
     <line x1="12" x2="12" y1="16" y2="12" stroke="white" strokeWidth="2" />
     <line x1="12" x2="12.01" y1="8" y2="8" stroke="white" strokeWidth="2" />
@@ -46,33 +38,17 @@ const InfoIcon = () => (
 );
 
 const SuccessIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="#166534"
-  >
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+    viewBox="0 0 24 24" fill="#166534">
     <circle cx="12" cy="12" r="10" />
-    <path
-      d="m8 12 3 3 5-6"
-      stroke="white"
-      strokeWidth="2"
-      fill="none"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
+    <path d="m8 12 3 3 5-6" stroke="white" strokeWidth="2" fill="none"
+      strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
 const ErrorIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="#991B1B"
-  >
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+    viewBox="0 0 24 24" fill="#991B1B">
     <circle cx="12" cy="12" r="10" />
     <line x1="9" y1="9" x2="15" y2="15" stroke="white" strokeWidth="2" />
     <line x1="15" y1="9" x2="9" y2="15" stroke="white" strokeWidth="2" />
@@ -88,6 +64,14 @@ const iconFor = (type: Notification["type"]) => {
   }
 };
 
+type MergedNotification = Notification & { _liveId?: string };
+
+function hashCode(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return h;
+}
+
 const Header = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
@@ -101,52 +85,59 @@ const Header = () => {
   const user = useSelector((s: any) => s.auth?.user ?? s.loginRoute?.user);
   const employeeId = user?.employeeId ?? "";
 
-  console.log("User Role Find",user)
+  const dbNotifications = useSelector(
+    (s: RootState) => s.notifications.items
+  );
 
-const { items: dbNotifications } = useSelector(
-  (s: RootState) => s.notifications
-);
+  const liveNotifications = useSelector(
+    (s: RootState) => s.socket?.notifications ?? []
+  );
 
-const liveNotifications = useSelector(
-  (s: RootState) => s.socket?.notifications ?? []
-);
+  const notifications: MergedNotification[] = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: MergedNotification[] = [];
 
-function hashCode(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return h;
-}
+    for (const n of liveNotifications) {
+      const key = `live:${String(n.id)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push({
+        id: -Math.abs(hashCode(String(n.id))),
+        title: n.title,
+        message: n.message,
+        type: "INFO",
+        ticketId: n.ticketId ?? null,
+        ticketCode: null,
+        isRead: n.read ?? false,
+        createdAt: n.createdAt,
+        _liveId: String(n.id),
+      } as MergedNotification);
+    }
 
-const notifications = useMemo(() => {
-  const seen = new Set<string>();
-  const merged: Notification[] = [];
+    for (const d of dbNotifications) {
+      const key = `db:${String(d.id)}`;
+      if (seen.has(key)) continue;
+      const dupeOfLive = merged.some(
+        (m) =>
+          m._liveId &&
+          m.title === d.title &&
+          m.message === d.message &&
+          (m.ticketId ?? null) === (d.ticketId ?? null)
+      );
+      if (dupeOfLive) continue;
+      seen.add(key);
+      merged.push({ ...d, _liveId: undefined });
+    }
 
-  for (const n of liveNotifications) {
-    const key = String(n.id);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push({
-      id: typeof n.id === "number" ? n.id : -Math.abs(hashCode(String(n.id))),
-      title: n.title,
-      message: n.message,
-      type: "INFO",
-      ticketId: n.ticketId ?? null,
-      isRead: n.read ?? false,
-      createdAt: n.createdAt,
-    } as Notification);
-  }
+    merged.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
 
-  for (const d of dbNotifications) {
-    const key = String(d.id);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(d);
-  }
+    return merged;
+  }, [dbNotifications, liveNotifications]);
 
-  return merged;
-}, [dbNotifications, liveNotifications]);
-
-const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -173,19 +164,22 @@ const unreadCount = notifications.filter((n) => !n.isRead).length;
     navigate("/login");
   };
 
-  const handleMarkAsRead = (id: number) => {
-    if (id < 0) {
-      dispatch(markLiveNotificationRead(id));
+  const handleMarkAsRead = (notif: MergedNotification) => {
+    if (notif._liveId) {
+      dispatch(markLiveRead(notif._liveId));
       return;
     }
-    if (employeeId) dispatch(markNotificationRead({ id, employeeId }));
+    if (employeeId) {
+      dispatch(markNotificationRead({ id: notif.id, employeeId }));
+    }
   };
 
   const handleMarkAllRead = () => {
     if (employeeId) dispatch(markAllNotificationsRead(employeeId));
+    dispatch(markAllLiveRead());
   };
 
-  const goToTicket = (notif: Notification) => {
+  const goToTicket = (notif: MergedNotification) => {
     if (notif.ticketId) {
       const role = user?.activeRole ?? "";
       if (role === "EMPLOYEE") {
@@ -234,6 +228,7 @@ const unreadCount = notifications.filter((n) => !n.isRead).length;
       </div>
 
       <div className="flex items-center gap-4 md:gap-6">
+        {/* -------- Bell + dropdown -------- */}
         <div className="relative" ref={notificationRef}>
           <button
             onClick={() => setIsNotificationOpen(!isNotificationOpen)}
@@ -287,9 +282,9 @@ const unreadCount = notifications.filter((n) => !n.isRead).length;
                 {notifications.length > 0 ? (
                   notifications.slice(0, 6).map((notif) => (
                     <div
-                      key={notif.id}
+                      key={`${notif.id}-${notif._liveId ?? "db"}`}
                       onClick={() => {
-                        handleMarkAsRead(notif.id);
+                        if (!notif.isRead) handleMarkAsRead(notif);
                         goToTicket(notif);
                       }}
                       className={`relative flex flex-col p-3 pl-4 rounded-xl transition-all cursor-pointer border border-transparent ${

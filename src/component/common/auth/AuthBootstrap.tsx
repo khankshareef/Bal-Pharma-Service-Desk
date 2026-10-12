@@ -136,11 +136,29 @@ const AuthBootstrap = ({ children }: { children: ReactNode }) => {
   const [restoreAttempt, setRestoreAttempt] = useState(0);
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const restoreStartedFor = useRef<string | null>(null);
+    const activeTicketId = useSelector(
+  (s: any) => s.activeView?.activeTicketId ?? null
+);
+const activeTicketIdRef = useRef<number | null>(null);
+
+const activeRole = useSelector(
+  (s: any) => s.auth?.user?.activeRole ?? s.auth?.user?.role ?? ""
+);
 
   const currentUserIdRef = useRef<number | null>(null);
   useEffect(() => {
     currentUserIdRef.current = user?.userId ?? null;
   }, [user]);
+
+
+const isAdminRef = useRef(false);
+useEffect(() => {
+  const r = String(activeRole).toUpperCase();
+  isAdminRef.current = r === "ADMIN" || r === "SUPER_MANAGER";
+}, [activeRole]);
+useEffect(() => {
+  activeTicketIdRef.current = activeTicketId;
+}, [activeTicketId]);
 
   useEffect(() => {
     const unlock = () => {
@@ -211,52 +229,57 @@ const AuthBootstrap = ({ children }: { children: ReactNode }) => {
     const onConnect = () => dispatch(setConnected(true));
     const onDisconnect = () => dispatch(setConnected(false));
 
-    const onComment = (payload: any) => {
-      const raw = payload?.comment ?? payload;
-      const ticketId = Number(
-        payload?.ticketId ??
-          payload?.ticket_id ??
-          raw?.ticketId ??
-          raw?.ticket_id
-      );
-      if (!Number.isFinite(ticketId) || !raw?.id) return;
+   const onComment = (payload: any) => {
+  const raw = payload?.comment ?? payload;
+  const ticketId = Number(
+    payload?.ticketId ??
+      payload?.ticket_id ??
+      raw?.ticketId ??
+      raw?.ticket_id
+  );
+  if (!Number.isFinite(ticketId) || !raw?.id) return;
 
-      const comment: Comment = {
-        id: raw.id,
-        ticketId,
-        authorId: raw.authorId,
-        authorName: raw.authorName,
-        authorInitials: raw.authorInitials ?? "?",
-        body: raw.body,
-        createdAt: raw.createdAt,
-      };
+  const comment: Comment = {
+    id: raw.id,
+    ticketId,
+    authorId: raw.authorId,
+    authorName: raw.authorName,
+    authorInitials: raw.authorInitials ?? "?",
+    body: raw.body,
+    createdAt: raw.createdAt,
+  };
 
-      dispatch(receiveComment(comment));
+  dispatch(receiveComment(comment));
 
-      if (comment.authorId === currentUserIdRef.current) return;
+  if (comment.authorId === currentUserIdRef.current) return;
 
-      const preview =
-        comment.body.length > 90
-          ? `${comment.body.slice(0, 90)}…`
-          : comment.body;
+  const isViewingThisTicket = activeTicketIdRef.current === ticketId;
 
-      dispatch(
-        pushNotification({
-          id: `comment-${comment.id}`,
-          title: "New message",
-          message: `${comment.authorName}: ${preview}`,
-          type: "COMMENT",
-          source: (raw.authorRole ?? "USER") as
-            | "EXECUTIVE"
-            | "USER"
-            | "ADMIN",
-          ticketId,
-        })
-      );
+  if (!isViewingThisTicket && !isAdminRef.current) {
+    playNotificationSound();
+  }
 
-      playNotificationSound();
-    };
+  if (isViewingThisTicket) return;
 
+  const preview =
+    comment.body.length > 90
+      ? `${comment.body.slice(0, 90)}…`
+      : comment.body;
+
+  dispatch(
+    pushNotification({
+      id: `comment-${comment.id}`,
+      title: "New message",
+      message: `${comment.authorName}: ${preview}`,
+      type: "COMMENT",
+      source: (raw.authorRole ?? "USER") as
+        | "EXECUTIVE"
+        | "USER"
+        | "ADMIN",
+      ticketId,
+    })
+  );
+};
     const onNotification = (n: any) => {
       const idStr = String(n?.id ?? "");
       const typeStr = String(n?.type ?? "").toUpperCase();

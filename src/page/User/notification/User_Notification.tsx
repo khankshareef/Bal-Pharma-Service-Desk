@@ -8,10 +8,15 @@ import Loader from "../../../component/loader/Loader";
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import {
   markAllNotificationsRead,
-  markLiveNotificationRead,
   markNotificationRead,
   type Notification as NotificationType,
 } from "../../../store/user/slice/NotificationSlice";
+import {
+  markAllRead as markAllLiveNotificationsRead,
+  markRead as markLiveNotificationRead,
+} from "../../../store/user/slice/socketSlice";
+
+type MergedNotification = NotificationType & { _liveId?: string };
 
 const iconFor = (type: NotificationType["type"]) => {
   switch (type) {
@@ -22,6 +27,14 @@ const iconFor = (type: NotificationType["type"]) => {
   }
 };
 
+function hashCode(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  return h;
+}
+
 const User_Notification = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
@@ -29,11 +42,10 @@ const User_Notification = () => {
   const user = useSelector((s: any) => s.auth?.user ?? s.loginRoute?.user);
   const employeeId = user?.employeeId ?? "";
 
-  const {
-    items: dbNotifications,
-    unreadCount,
-    loading,
-  } = useSelector((s: RootState) => s.notifications);
+  const dbNotifications = useSelector(
+    (s: RootState) => s.notifications.items
+  );
+  const loading = useSelector((s: RootState) => s.notifications.loading);
 
   const liveNotifications = useSelector(
     (s: RootState) => s.socket?.notifications ?? []
@@ -41,8 +53,9 @@ const User_Notification = () => {
 
   const [localLoading, setLocalLoading] = useState(false);
 
-  const notifications: NotificationType[] = useMemo(() => {
-    const list: NotificationType[] = [...dbNotifications];
+  const notifications: MergedNotification[] = useMemo(() => {
+    const list: MergedNotification[] = [...dbNotifications];
+
     liveNotifications.forEach((n) => {
       const exists = list.some(
         (d) =>
@@ -52,32 +65,46 @@ const User_Notification = () => {
       );
       if (!exists) {
         list.unshift({
-          id: -Math.abs(hashCode(n.id)),
+          id: -Math.abs(hashCode(String(n.id))),
           title: n.title,
           message: n.message,
           type: "INFO",
           ticketId: n.ticketId ?? null,
           ticketCode: null,
-          isRead: false,
+          isRead: n.read ?? false,
           createdAt: n.createdAt,
-        });
+          _liveId: String(n.id),
+        } as MergedNotification);
       }
     });
+
+    list.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
 
     return list;
   }, [dbNotifications, liveNotifications]);
 
-  const handleMarkAsRead = async (id: number) => {
-    if (!employeeId) return;
-    if (id < 0) {
-      dispatch(markLiveNotificationRead(id));
+  const combinedUnread = useMemo(
+    () => notifications.filter((n) => !n.isRead).length,
+    [notifications]
+  );
+
+  const handleMarkAsRead = async (notif: MergedNotification) => {
+    // Live (socket slice)
+    if (notif._liveId) {
+      dispatch(markLiveNotificationRead(notif._liveId));
       return;
     }
+
+    if (!employeeId || notif.id <= 0) return;
     try {
       setLocalLoading(true);
-      await dispatch(markNotificationRead({ id, employeeId })).unwrap();
+      await dispatch(
+        markNotificationRead({ id: notif.id, employeeId })
+      ).unwrap();
     } catch {
-      /* ignore */
     } finally {
       setLocalLoading(false);
     }
@@ -88,13 +115,16 @@ const User_Notification = () => {
     try {
       setLocalLoading(true);
       await dispatch(markAllNotificationsRead(employeeId)).unwrap();
+      dispatch(markAllLiveNotificationsRead());
     } finally {
       setLocalLoading(false);
     }
   };
 
-  const handleClick = (notif: NotificationType) => {
-    if (!notif.isRead) handleMarkAsRead(notif.id);
+  // ---- row click → mark read + navigate ----
+  const handleClick = (notif: MergedNotification) => {
+    if (!notif.isRead) handleMarkAsRead(notif);
+
     const ticketId = notif.ticketId ?? null;
     if (ticketId) {
       navigate(`../my-tickets/tkt-details/${ticketId}`);
@@ -114,20 +144,20 @@ const User_Notification = () => {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">
           Notifications{" "}
-          {unreadCount > 0 && (
+          {combinedUnread > 0 && (
             <span className="text-sm font-normal text-gray-500 ml-2">
-              ({unreadCount} unread)
+              ({combinedUnread} unread)
             </span>
           )}
         </h1>
 
         <Reusable_Button
           onClick={handleMarkAllRead}
-          disabled={unreadCount === 0 || localLoading}
+          disabled={combinedUnread === 0 || localLoading}
           children="Mark All Read"
           variant="secondary"
           className={`px-4 py-2 border rounded-full text-sm font-medium ${
-            unreadCount > 0
+            combinedUnread > 0
               ? "border-gray-300 text-gray-700 hover:bg-gray-50"
               : "border-gray-200 text-gray-400 cursor-not-allowed"
           }`}
@@ -146,7 +176,7 @@ const User_Notification = () => {
           <div className="flex flex-col gap-3">
             {notifications.map((notif) => (
               <div
-                key={notif.id}
+                key={`${notif.id}-${notif._liveId ?? "db"}`}
                 className={`relative flex flex-col p-4 pl-5 rounded-xl transition-all border ${
                   !notif.isRead
                     ? "bg-[#F0F6FF] hover:bg-[#e4effc] border-[#003D8C]/20"
@@ -157,39 +187,35 @@ const User_Notification = () => {
                   <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#003D8C] rounded-l-xl" />
                 )}
 
-                <div className="flex justify-between items-start">
-                  <div
-                    onClick={() => handleClick(notif)}
-                    className="flex-1 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      {!notif.isRead && (
-                        <div className="w-2.5 h-2.5 bg-[#003D8C] rounded-full mr-1 shrink-0" />
-                      )}
-                      <span className="text-lg">{iconFor(notif.type)}</span>
-                      <h2
-                        className={`font-bold text-base ${
-                          notif.isRead ? "text-gray-600" : "text-black"
-                        }`}
-                      >
-                        {notif.title}
-                      </h2>
-                    </div>
-
-                    <p className="text-sm text-gray-600 ml-7">
-                      {notif.message}
-                    </p>
-
-                    {notif.ticketCode && (
-                      <p className="text-xs text-blue-600 ml-7 mt-1 font-medium">
-                        Ticket: {notif.ticketCode}
-                      </p>
+                <div
+                  onClick={() => handleClick(notif)}
+                  className="flex-1 cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    {!notif.isRead && (
+                      <div className="w-2.5 h-2.5 bg-[#003D8C] rounded-full mr-1 shrink-0" />
                     )}
-
-                    <p className="text-sm text-gray-400 ml-7 mt-0.5">
-                      {new Date(notif.createdAt).toLocaleString()}
-                    </p>
+                    <span className="text-lg">{iconFor(notif.type)}</span>
+                    <h2
+                      className={`font-bold text-base ${
+                        notif.isRead ? "text-gray-600" : "text-black"
+                      }`}
+                    >
+                      {notif.title}
+                    </h2>
                   </div>
+
+                  <p className="text-sm text-gray-600 ml-7">{notif.message}</p>
+
+                  {notif.ticketCode && (
+                    <p className="text-xs text-blue-600 ml-7 mt-1 font-medium">
+                      Ticket: {notif.ticketCode}
+                    </p>
+                  )}
+
+                  <p className="text-sm text-gray-400 ml-7 mt-0.5">
+                    {new Date(notif.createdAt).toLocaleString()}
+                  </p>
                 </div>
               </div>
             ))}
@@ -199,13 +225,5 @@ const User_Notification = () => {
     </div>
   );
 };
-
-function hashCode(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = (h * 31 + s.charCodeAt(i)) | 0;
-  }
-  return h;
-}
 
 export default User_Notification;

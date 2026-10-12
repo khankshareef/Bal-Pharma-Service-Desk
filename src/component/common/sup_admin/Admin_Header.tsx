@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FiBell, FiChevronDown, FiLogOut, FiUser } from "react-icons/fi";
+import { FiChevronDown, FiLogOut, FiUser } from "react-icons/fi";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 
 import bal_pharma_limited_logo from "../../../assets/bal_pharma_limited_logo.jpg";
-import Reusable_Button from "../../button/Reusable_Button";
 
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import { logout } from "../../../store/user/slice/Login_Slice";
@@ -95,7 +94,7 @@ const Admin_Header = () => {
   const dispatch = useDispatch<AppDispatch>();
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [, setIsNotificationOpen] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -232,105 +231,6 @@ const unreadCount = notifications.filter((n) => !n.isRead).length;
       </div>
 
       <div className="flex items-center gap-4 md:gap-6">
-        <div className="relative" ref={notificationRef}>
-          <button
-            onClick={() => setIsNotificationOpen(!isNotificationOpen)}
-            className={`relative p-2 rounded-full transition-colors focus:outline-none cursor-pointer ${
-              isNotificationOpen
-                ? "bg-blue-50 text-[#003D8C]"
-                : "text-gray-500 hover:bg-gray-100"
-            }`}
-          >
-            <FiBell size={20} />
-            {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
-                {unreadCount > 99 ? "99+" : unreadCount}
-              </span>
-            )}
-          </button>
-
-          {isNotificationOpen && (
-            <div className="absolute right-[-60px] md:right-0 mt-3 w-[380px] bg-white rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] border border-gray-100 flex flex-col z-[1000]">
-              <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-[#F8FAFC] rounded-t-xl">
-                <div>
-                  <h3 className="text-base font-bold text-gray-900">
-                    Notifications
-                  </h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    You have {unreadCount} unread
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  {unreadCount > 0 && (
-                    <button
-                      onClick={handleMarkAllRead}
-                      className="text-xs text-blue-600 hover:underline font-medium"
-                    >
-                      Mark all read
-                    </button>
-                  )}
-                  <Reusable_Button
-                    children="View All"
-                    variant="secondary"
-                    onClick={() => {
-                      setIsNotificationOpen(false);
-                      navigate("/super-manager/notification");
-                    }}
-                    className="!px-3 !py-1.5 !text-xs"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2 p-3 max-h-[400px] overflow-y-auto bg-[#F8FAFC] rounded-b-xl">
-                {notifications.length > 0 ? (
-                  notifications.slice(0, 6).map((notif) => (
-                    <div
-                      key={notif.id}
-                      onClick={() => {
-                        handleMarkAsRead(notif.id);
-                        goToTicket(notif);
-                      }}
-                      className={`relative flex flex-col p-3 pl-4 rounded-xl transition-all cursor-pointer border border-transparent ${
-                        !notif.isRead
-                          ? "bg-[#F0F6FF] hover:bg-[#e4effc]"
-                          : "bg-white hover:bg-gray-50 border-gray-100"
-                      }`}
-                    >
-                      {!notif.isRead && (
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#003D8C] rounded-l-xl" />
-                      )}
-
-                      <div className="flex items-center gap-2 mb-1">
-                        {!notif.isRead && (
-                          <div className="w-2 h-2 bg-[#003D8C] rounded-full mr-1 shrink-0" />
-                        )}
-                        {iconFor(notif.type)}
-                        <h2
-                          className={`font-bold text-sm ${
-                            notif.isRead ? "text-gray-600" : "text-black"
-                          }`}
-                        >
-                          {notif.title}
-                        </h2>
-                      </div>
-
-                      <p className="text-xs text-gray-500 ml-6">
-                        {notif.message}
-                      </p>
-                      <p className="text-[11px] text-gray-400 ml-6 mt-1">
-                        {new Date(notif.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-6 text-center text-sm text-gray-500">
-                    No notifications right now.
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
 
         <div className="hidden md:block h-8 w-px bg-gray-200" />
 

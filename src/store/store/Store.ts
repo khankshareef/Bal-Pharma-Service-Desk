@@ -15,6 +15,7 @@ import reportsReducer from "../super_admin/slice/reportsSlice";
 import superManagerDashboardReducer from "../super_admin/slice/superManagerDashboardSlice";
 import templatesReducer from "../super_admin/slice/templatesSlice";
 import UnitSlice from "../super_admin/slice/UnitSlice";
+import activeViewReducer from "../user/slice/activeViewSlice";
 import commentReducer from "../user/slice/commentSlice";
 import dashboardReducer from "../user/slice/dashboardSlice";
 import LoginReducer from "../user/slice/Login_Slice";
@@ -50,6 +51,7 @@ const store = configureStore({
         config: configReducer,
         socket: socketReducer,
         comments: commentReducer,
+        activeView: activeViewReducer,
   },
 });
 

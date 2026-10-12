@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { FaRegStar } from "react-icons/fa";
 import {
   FiArrowLeft,
@@ -21,6 +21,10 @@ import Rating_Model from "../../../component/Rating_Model/Rating_Model";
 import { getSocket } from "../../../service/socket";
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import {
+  clearActiveTicketId,
+  setActiveTicketId,
+} from "../../../store/user/slice/activeViewSlice";
+import {
   addComment,
   fetchComments,
   receiveComment,
@@ -39,7 +43,6 @@ import {
 import { fileUrl } from "../../../utils/fileUrl";
 
 const EMPTY_COMMENTS: never[] = [];
-
 const REOPEN_WINDOW_HOURS = 24;
 
 const hoursSince = (iso?: string | null): number => {
@@ -73,10 +76,7 @@ const statusLabel = (s?: string) =>
 
 const slaLabel = (s?: string) =>
   s
-    ? s
-        .split("_")
-        .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
-        .join(" ")
+    ? s.split("_").map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(" ")
     : "";
 
 type PopupKind = "success" | "error" | "confirm" | "info";
@@ -95,12 +95,12 @@ const Ticket_Details = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-
   const ticketId = Number(id);
 
   const user = useSelector((s: any) => s.auth?.user ?? s.loginRoute?.user);
   const employeeId = user?.employeeId ?? "";
   const currentUserId = user?.userId ?? null;
+  const myRole = String(user?.activeRole ?? "").toUpperCase();
 
   const cached = useSelector((s: RootState) =>
     s.tickets.tickets.find((t: Ticket) => t.id === ticketId)
@@ -121,6 +121,23 @@ const Ticket_Details = () => {
   const [isRating, setRating] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  const [typers, setTypers] = useState<
+    Record<string, { name: string; at: number }>
+  >({});
+  const typingTimeoutRef = useRef<number | null>(null);
+
+  const sendTyping = (isTyping: boolean) => {
+    const sock = getSocket();
+    if (!sock) return;
+    sock.emit("ticket:typing", {
+      ticketId,
+      userId: user?.userId,
+      activeRole: user?.activeRole ?? "",
+      name: user?.name ?? "",
+      isTyping,
+    });
+  };
+
   const [popup, setPopup] = useState<PopupState>({
     isOpen: false,
     type: "info",
@@ -136,6 +153,78 @@ const Ticket_Details = () => {
   ) => {
     setPopup({ ...opts, isOpen: true });
   };
+
+  useEffect(() => {
+    if (!ticketId || Number.isNaN(ticketId)) return;
+    if (!comment) return;
+
+    sendTyping(true);
+
+    if (typingTimeoutRef.current) {
+      window.clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = window.setTimeout(() => {
+      sendTyping(false);
+    }, 1500);
+
+    return () => {
+      if (typingTimeoutRef.current) {
+        window.clearTimeout(typingTimeoutRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comment, ticketId]);
+
+  useEffect(() => {
+    return () => {
+      sendTyping(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // -------------------- typing: listen --------------------
+  useEffect(() => {
+    if (!ticketId || Number.isNaN(ticketId)) return;
+    const sock = getSocket();
+    if (!sock) return;
+
+    const onTyping = (payload: any) => {
+      if (Number(payload?.ticketId) !== ticketId) return;
+      const uid = Number(payload?.userId);
+      const role = String(payload?.activeRole ?? "").toUpperCase();
+      if (!uid) return;
+      if (uid === user?.userId && role === myRole) return;
+
+      const key = `${uid}:${role}`;
+      setTypers((prev) => {
+        const next = { ...prev };
+        if (payload.isTyping) {
+          next[key] = { name: payload.name ?? "Someone", at: Date.now() };
+        } else {
+          delete next[key];
+        }
+        return next;
+      });
+    };
+
+    sock.on("ticket:typing", onTyping);
+
+    const interval = window.setInterval(() => {
+      setTypers((prev) => {
+        const now = Date.now();
+        const next: typeof prev = {};
+        for (const [k, v] of Object.entries(prev)) {
+          if (now - v.at < 3000) next[k] = v;
+        }
+        return next;
+      });
+    }, 1000);
+
+    return () => {
+      sock.off("ticket:typing", onTyping);
+      window.clearInterval(interval);
+    };
+  }, [ticketId, user?.userId, myRole]);
 
   useEffect(() => {
     if (!id) return;
@@ -173,6 +262,14 @@ const Ticket_Details = () => {
 
   useEffect(() => {
     if (!ticketId || Number.isNaN(ticketId)) return;
+    dispatch(setActiveTicketId(ticketId));
+    return () => {
+      dispatch(clearActiveTicketId());
+    };
+  }, [ticketId, dispatch]);
+
+  useEffect(() => {
+    if (!ticketId || Number.isNaN(ticketId)) return;
     dispatch(fetchComments(ticketId));
   }, [ticketId, dispatch]);
 
@@ -190,9 +287,7 @@ const Ticket_Details = () => {
           raw?.ticketId ??
           raw?.ticket_id
       );
-
       if (incomingTicketId !== ticketId) return;
-
       if (!raw?.id) return;
 
       const c: Comment = {
@@ -278,7 +373,6 @@ const Ticket_Details = () => {
 
   const handleClose = () => {
     if (!ticket) return;
-
     showPopup({
       type: "confirm",
       title: "Close Ticket",
@@ -332,7 +426,6 @@ const Ticket_Details = () => {
 
   const handleReopen = () => {
     if (!ticket) return;
-
     if (!isReopenAllowed(ticket)) {
       showPopup({
         type: "error",
@@ -342,7 +435,6 @@ const Ticket_Details = () => {
       });
       return;
     }
-
     showPopup({
       type: "confirm",
       title: "Reopen Request",
@@ -377,6 +469,7 @@ const Ticket_Details = () => {
     try {
       await dispatch(addComment({ ticketId, body })).unwrap();
       setComment("");
+      sendTyping(false);
     } catch (err: any) {
       showPopup({
         type: "error",
@@ -427,18 +520,14 @@ const Ticket_Details = () => {
       {[1, 2, 3, 4, 5].map((star) => (
         <svg
           key={star}
-          className={`w-4 h-4 ${
-            star <= value ? "text-yellow-400" : "text-gray-200"
-          }`}
+          className={`w-4 h-4 ${star <= value ? "text-yellow-400" : "text-gray-200"}`}
           fill="currentColor"
           viewBox="0 0 20 20"
         >
           <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
         </svg>
       ))}
-      <span className="text-sm text-gray-700 ml-1 font-medium">
-        ({value}/5)
-      </span>
+      <span className="text-sm text-gray-700 ml-1 font-medium">({value}/5)</span>
     </div>
   );
 
@@ -490,9 +579,7 @@ const Ticket_Details = () => {
     activity.push({
       time: formatDate(rating.createdAt),
       role: "User",
-      text: `Rating: ${rating.rating}/5${
-        rating.comments ? ` — "${rating.comments}"` : ""
-      }`,
+      text: `Rating: ${rating.rating}/5${rating.comments ? ` — "${rating.comments}"` : ""}`,
     });
   }
 
@@ -567,46 +654,26 @@ const Ticket_Details = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <InfoTile
-          icon={FiTag}
-          bg="bg-blue-50"
-          color="text-blue-600"
-          label="Category"
-          value={ticket.categoryName ?? "—"}
-        />
+        <InfoTile icon={FiTag} bg="bg-blue-50" color="text-blue-600" label="Category" value={ticket.categoryName ?? "—"} />
         <InfoTile
           icon={FiAward}
           bg="bg-purple-50"
           color="text-purple-600"
           label="Priority"
           value={
-            <span
-              className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getPriorityColor(
-                ticket.priority
-              )}`}
-            >
+            <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getPriorityColor(ticket.priority)}`}>
               {priorityLabel(ticket.priority)}
             </span>
           }
         />
-        <InfoTile
-          icon={FiCalendar}
-          bg="bg-green-50"
-          color="text-green-600"
-          label="Raised"
-          value={formatDate(ticket.createdAt)}
-        />
+        <InfoTile icon={FiCalendar} bg="bg-green-50" color="text-green-600" label="Raised" value={formatDate(ticket.createdAt)} />
         <InfoTile
           icon={FiClock}
           bg="bg-orange-50"
           color="text-orange-600"
           label="SLA"
           value={
-            <span
-              className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getSLAColor(
-                ticket.slaStatus
-              )}`}
-            >
+            <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getSLAColor(ticket.slaStatus)}`}>
               {slaLabel(ticket.slaStatus)}
             </span>
           }
@@ -617,59 +684,28 @@ const Ticket_Details = () => {
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-xl border border-gray-200">
             <div className="border-b border-gray-100 px-6 py-4">
-              <h3 className="font-bold text-gray-800 text-[15px]">
-                Ticket Details
-              </h3>
+              <h3 className="font-bold text-gray-800 text-[15px]">Ticket Details</h3>
             </div>
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <Field label="Ticket ID" value={ticket.ticketCode} />
                   <Field label="Subject" value={ticket.subject} />
-                  <Field
-                    label="Department"
-                    value={ticket.departmentName ?? "—"}
-                  />
-                  <Field
-                    label="Sub Category"
-                    value={ticket.subCategoryName ?? "—"}
-                  />
+                  <Field label="Department" value={ticket.departmentName ?? "—"} />
+                  <Field label="Sub Category" value={ticket.subCategoryName ?? "—"} />
                 </div>
                 <div className="space-y-4">
-                  <Field
-                    label="Raised By"
-                    value={`${ticket.createdByName ?? "—"} (${
-                      ticket.createdByEmployeeId ?? "—"
-                    })`}
-                  />
+                  <Field label="Raised By" value={`${ticket.createdByName ?? "—"} (${ticket.createdByEmployeeId ?? "—"})`} />
                   <Field label="Unit" value={`${ticket.unitName ?? "—"}`} />
-                  <Field
-                    label="Assigned To"
-                    value={ticket.assignedToEmployeeId ?? "Unassigned"}
-                  />
-                  <Field
-                    label="Last Updated"
-                    value={formatDate(ticket.updatedAt)}
-                  />
-                  {ticket.resolvedAt && (
-                    <Field
-                      label="Resolved"
-                      value={formatDate(ticket.resolvedAt)}
-                    />
-                  )}
-                  {ticket.closedAt && (
-                    <Field
-                      label="Closed"
-                      value={formatDate(ticket.closedAt)}
-                    />
-                  )}
+                  <Field label="Assigned To" value={ticket.assignedToEmployeeId ?? "Unassigned"} />
+                  <Field label="Last Updated" value={formatDate(ticket.updatedAt)} />
+                  {ticket.resolvedAt && <Field label="Resolved" value={formatDate(ticket.resolvedAt)} />}
+                  {ticket.closedAt && <Field label="Closed" value={formatDate(ticket.closedAt)} />}
                 </div>
               </div>
 
               <div className="mt-6 pt-6 border-t border-gray-100">
-                <label className="text-xs text-gray-500 uppercase block mb-2">
-                  Description
-                </label>
+                <label className="text-xs text-gray-500 uppercase block mb-2">Description</label>
                 <p className="text-gray-700 text-sm leading-relaxed">
                   {ticket.description || "No description provided."}
                 </p>
@@ -677,30 +713,18 @@ const Ticket_Details = () => {
 
               {ticket.resolutionNotes && (
                 <div className="mt-6 pt-6 border-t border-gray-100">
-                  <label className="text-xs text-gray-500 uppercase block mb-2">
-                    Resolution Notes
-                  </label>
-                  <p className="text-gray-700 text-sm leading-relaxed">
-                    {ticket.resolutionNotes}
-                  </p>
+                  <label className="text-xs text-gray-500 uppercase block mb-2">Resolution Notes</label>
+                  <p className="text-gray-700 text-sm leading-relaxed">{ticket.resolutionNotes}</p>
                   {ticket.resolutionType && (
-                    <p className="text-xs text-gray-500 mt-2">
-                      Type: <strong>{ticket.resolutionType}</strong>
-                    </p>
+                    <p className="text-xs text-gray-500 mt-2">Type: <strong>{ticket.resolutionType}</strong></p>
                   )}
                 </div>
               )}
 
               <div className="mt-6 pt-6 border-t border-gray-100">
-                <label className="text-xs text-gray-500 uppercase block mb-1">
-                  Rating
-                </label>
-                {rating ? (
-                  renderStars(rating.rating)
-                ) : (
-                  <p className="text-sm text-gray-400 italic">
-                    Not rated yet
-                  </p>
+                <label className="text-xs text-gray-500 uppercase block mb-1">Rating</label>
+                {rating ? renderStars(rating.rating) : (
+                  <p className="text-sm text-gray-400 italic">Not rated yet</p>
                 )}
               </div>
             </div>
@@ -708,9 +732,7 @@ const Ticket_Details = () => {
 
           <div className="bg-white rounded-xl border border-gray-200">
             <div className="border-b border-gray-100 px-6 py-4">
-              <h3 className="font-bold text-gray-800 text-[15px]">
-                Activity Timeline
-              </h3>
+              <h3 className="font-bold text-gray-800 text-[15px]">Activity Timeline</h3>
             </div>
             <div className="p-6 space-y-3">
               {activity.map((a, i) => (
@@ -733,24 +755,16 @@ const Ticket_Details = () => {
                 <FiPaperclip className="text-blue-600" />
                 Attachments
                 {attachments.length > 0 && (
-                  <span className="text-xs font-normal text-gray-400">
-                    ({attachments.length})
-                  </span>
+                  <span className="text-xs font-normal text-gray-400">({attachments.length})</span>
                 )}
               </h3>
             </div>
             <div className="p-6 space-y-4">
               {attachments.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  No files attached to this ticket.
-                </p>
+                <p className="text-sm text-gray-500">No files attached to this ticket.</p>
               ) : (
                 attachments.map((a, i) => (
-                  <AttachmentPreview
-                    key={i}
-                    url={fileUrl(a.url)}
-                    name={a.name}
-                  />
+                  <AttachmentPreview key={i} url={fileUrl(a.url)} name={a.name} />
                 ))
               )}
             </div>
@@ -760,12 +774,8 @@ const Ticket_Details = () => {
         <div className="lg:col-span-1">
           <div className="bg-white rounded-xl border border-gray-200 sticky top-6 flex flex-col max-h-[calc(100vh-3rem)]">
             <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
-              <h3 className="font-bold text-gray-800 text-[15px]">
-                Comments
-              </h3>
-              <span className="text-xs text-gray-400">
-                {comments.length}
-              </span>
+              <h3 className="font-bold text-gray-800 text-[15px]">Comments</h3>
+              <span className="text-xs text-gray-400">{comments.length}</span>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -781,27 +791,19 @@ const Ticket_Details = () => {
                   return (
                     <div
                       key={c.id}
-                      className={`flex gap-2 ${
-                        isMine ? "flex-row-reverse" : "flex-row"
-                      }`}
+                      className={`flex gap-2 ${isMine ? "flex-row-reverse" : "flex-row"}`}
                     >
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                          isMine
-                            ? "bg-blue-600 text-white"
-                            : "bg-blue-100 text-blue-700"
+                          isMine ? "bg-blue-600 text-white" : "bg-blue-100 text-blue-700"
                         }`}
                       >
-                        <span className="text-xs font-bold">
-                          {c.authorInitials || "?"}
-                        </span>
+                        <span className="text-xs font-bold">{c.authorInitials || "?"}</span>
                       </div>
 
                       <div
                         className={`flex-1 rounded-lg px-3 py-2 min-w-0 ${
-                          isMine
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-50 text-gray-800"
+                          isMine ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-800"
                         }`}
                       >
                         <div
@@ -809,32 +811,40 @@ const Ticket_Details = () => {
                             isMine ? "flex-row-reverse justify-end" : ""
                           }`}
                         >
-                          <span
-                            className={`text-sm font-semibold truncate ${
-                              isMine ? "text-white" : "text-gray-800"
-                            }`}
-                          >
+                          <span className={`text-sm font-semibold truncate ${isMine ? "text-white" : "text-gray-800"}`}>
                             {isMine ? "You" : c.authorName}
                           </span>
-                          <span
-                            className={`text-[11px] shrink-0 ${
-                              isMine ? "text-blue-100" : "text-gray-400"
-                            }`}
-                          >
+                          <span className={`text-[11px] shrink-0 ${isMine ? "text-blue-100" : "text-gray-400"}`}>
                             {formatDate(c.createdAt)}
                           </span>
                         </div>
-                        <p
-                          className={`text-sm whitespace-pre-wrap break-words ${
-                            isMine ? "text-white" : "text-gray-700"
-                          }`}
-                        >
+                        <p className={`text-sm whitespace-pre-wrap break-words ${isMine ? "text-white" : "text-gray-700"}`}>
                           {c.body}
                         </p>
                       </div>
                     </div>
                   );
                 })
+              )}
+
+              {Object.values(typers).length > 0 && (
+                <div className="flex gap-2 justify-start">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                    <span className="text-xs font-bold text-blue-700">
+                      {Object.values(typers)[0].name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="rounded-lg bg-gray-50 px-3 py-2 flex items-center gap-1">
+                    <span className="text-[11px] text-gray-500 mr-1">
+                      {Object.values(typers).length === 1
+                        ? `${Object.values(typers)[0].name} is typing`
+                        : `${Object.values(typers).length} people are typing`}
+                    </span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "-0.3s" }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "-0.15s" }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" />
+                  </div>
+                </div>
               )}
             </div>
 
@@ -892,9 +902,7 @@ const Ticket_Details = () => {
 
 const Field = ({ label, value }: { label: string; value: ReactNode }) => (
   <div>
-    <label className="text-xs text-gray-500 uppercase block mb-1">
-      {label}
-    </label>
+    <label className="text-xs text-gray-500 uppercase block mb-1">{label}</label>
     <p className="text-gray-900">{value}</p>
   </div>
 );
