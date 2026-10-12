@@ -11,6 +11,7 @@ import Reusable_Table, {
 
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import { fetchUnits } from "../../../store/super_admin/slice/Add_User";
+import { fetchCategories } from "../../../store/super_admin/slice/CategorySlice";
 import {
   fetchTickets,
   type Ticket,
@@ -55,6 +56,17 @@ const All_Tickets = () => {
   const { tickets, loading, error } = useSelector(
     (s: RootState) => s.tickets
   );
+    const categories = useSelector(
+  (s: any) => s.categories?.categories ?? s.categories?.items ?? s.categories ?? []
+);
+
+const categoryOptions = useMemo(
+  () =>
+    (Array.isArray(categories) ? categories : [])
+      .map((c: any) => String(c?.name ?? "").trim())
+      .filter(Boolean),
+  [categories]
+);
 
   const units = useSelector((s: RootState) => s.addUser.units);
 
@@ -64,6 +76,7 @@ const All_Tickets = () => {
   useEffect(() => {
     dispatch(fetchTickets());
     dispatch(fetchUnits());
+    dispatch(fetchCategories());
   }, [dispatch]);
 
 const unitOptions = useMemo(() => {
@@ -213,10 +226,7 @@ const unitOptions = useMemo(() => {
             {
               key: "Category",
               label: "Category",
-              options: [
-                "Network", "Hardware", "Software", "Application",
-                "Security", "Database", "Infrastructure", "Access & Permissions",
-              ],
+              options: categoryOptions,
             },
           ]}
         />

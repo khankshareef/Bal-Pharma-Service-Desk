@@ -6,6 +6,8 @@ import Reusable_Stat from "../../../component/stats/Reusable_Stat";
 import Reusable_Table, { type TableColumn } from "../../../component/table/Reusable_Table";
 
 import type { AppDispatch, RootState } from "../../../store/store/Store";
+import { fetchCategories } from "../../../store/super_admin/slice/CategorySlice";
+import { fetchDepartments } from "../../../store/super_admin/slice/DepartmentSlice";
 import {
   fetchReports,
   type ReportRow,
@@ -42,9 +44,22 @@ const Reports = () => {
 
   const { data, loading } = useSelector((s: RootState) => s.reports);
 
+  const { departments } = useSelector((s: RootState) => s.departments);
+
+const departmentOptions = useMemo(
+  () =>
+    departments
+      .map((department) => department.name.trim())
+      .filter(Boolean),
+  [departments]
+);
+
   useEffect(() => {
     dispatch(fetchReports());
+    dispatch(fetchCategories());
+    dispatch(fetchDepartments());
   }, [dispatch]);
+
 
   const reportData: Row[] = useMemo(() => {
     const rows: ReportRow[] = data?.rows ?? [];
@@ -137,18 +152,9 @@ const Reports = () => {
                 options: ["Open", "In Progress", "Resolved", "Closed"],
               },
               {
-                key: "Category",
-                label: "Category",
-                options: [
-                  "Network",
-                  "Hardware",
-                  "Software",
-                  "Application",
-                  "Security",
-                  "Database",
-                  "Infrastructure",
-                  "Access & Permissions",
-                ],
+                key: "Department",
+            label: "Department",
+                options: departmentOptions,
               },
             ]}
           />

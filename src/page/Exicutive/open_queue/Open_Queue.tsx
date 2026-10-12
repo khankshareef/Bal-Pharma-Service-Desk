@@ -10,6 +10,7 @@ import Reusable_Table, {
 } from "../../../component/table/Reusable_Table";
 
 import type { AppDispatch, RootState } from "../../../store/store/Store";
+import { fetchCategories } from "../../../store/super_admin/slice/CategorySlice";
 import {
   assignTicket,
   fetchUnassignedTickets,
@@ -58,6 +59,18 @@ const Open_Queue = () => {
     (s: RootState) => s.tickets
   );
 
+    const categories = useSelector(
+    (s: any) => s.categories?.categories ?? s.categories?.items ?? s.categories ?? []
+  );
+  
+  const categoryOptions = useMemo(
+    () =>
+      (Array.isArray(categories) ? categories : [])
+        .map((c: any) => String(c?.name ?? "").trim())
+        .filter(Boolean),
+    [categories]
+  );
+
   const [currentPage, setCurrentPage] = useState(1);
   const [selected, setSelected] = useState<TicketRow[]>([]);
 
@@ -72,6 +85,10 @@ useEffect(() => {
   if (!employeeId) return;
   dispatch(fetchUnassignedTickets(employeeId));
 }, [employeeId, dispatch]);
+
+  useEffect(() => {
+    dispatch(fetchCategories());
+  }, [dispatch]);
 
   const rows: TicketRow[] = useMemo(
     () =>
@@ -231,16 +248,7 @@ useEffect(() => {
             {
               key: "Category",
               label: "Category",
-              options: [
-                "Network",
-                "Hardware",
-                "Software",
-                "Application",
-                "Security",
-                "Database",
-                "Infrastructure",
-                "Access & Permissions",
-              ],
+              options: categoryOptions,
             },
           ]}
         />

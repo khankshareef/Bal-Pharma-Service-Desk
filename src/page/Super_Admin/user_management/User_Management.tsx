@@ -14,6 +14,7 @@ import Reusable_Table, {
 
 import Loader from "../../../component/loader/Loader";
 import type { AppDispatch, RootState } from "../../../store/store/Store";
+import { fetchDepartments } from "../../../store/super_admin/slice/DepartmentSlice";
 import {
   deleteUser,
   fetchUsers,
@@ -52,9 +53,20 @@ const User_Management = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedUsers, setSelectedUsers] = useState<UserRow[]>([]);
 
+  const { departments } = useSelector((s: RootState) => s.departments);
+
+const departmentOptions = useMemo(
+  () =>
+    departments
+      .map((department) => department.name.trim())
+      .filter(Boolean),
+  [departments]
+);
+
   useEffect(() => {
     dispatch(fetchUsers());
     dispatch(fetchUserStats());
+    dispatch(fetchDepartments());
   }, [dispatch]);
 
   const userRows: UserRow[] = useMemo(
@@ -250,7 +262,7 @@ const User_Management = () => {
           {
             key: "Department",
             label: "Department",
-            options: ["IT", "QA", "PRODUCTION", "FINANCE", "HR"],
+            options: departmentOptions,
           },
         ]}
       />

@@ -8,6 +8,7 @@ import Reusable_Table, {
 } from "../../../component/table/Reusable_Table";
 
 import type { AppDispatch, RootState } from "../../../store/store/Store";
+import { fetchCategories } from "../../../store/super_admin/slice/CategorySlice";
 import {
   fetchAssignedToExecutive,
   type Ticket,
@@ -48,20 +49,32 @@ const humanize = (s?: string) =>
 const Assigned = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-
   const user = useSelector((s: any) => s.auth?.user ?? s.loginRoute?.user);
   const employeeId = user?.employeeId ?? "";
-
   const { assignedTickets, loading } = useSelector(
     (s: RootState) => s.tickets
   );
+  const categories = useSelector(
+  (s: any) => s.categories?.categories ?? s.categories?.items ?? s.categories ?? []
+);
 
+const categoryOptions = useMemo(
+  () =>
+    (Array.isArray(categories) ? categories : [])
+      .map((c: any) => String(c?.name ?? "").trim())
+      .filter(Boolean),
+  [categories]
+);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   useEffect(() => {
     if (employeeId) dispatch(fetchAssignedToExecutive(employeeId));
   }, [dispatch, employeeId]);
+
+  useEffect(() => {
+    dispatch(fetchCategories());
+  }, [dispatch]);
 
   useEffect(() => {
     if (!loading && employeeId) setHasLoadedOnce(true);
@@ -165,16 +178,7 @@ const Assigned = () => {
             {
               key: "Category",
               label: "Category",
-              options: [
-                "Network",
-                "Hardware",
-                "Software",
-                "Application",
-                "Security",
-                "Database",
-                "Infrastructure",
-                "Access & Permissions",
-              ],
+              options: categoryOptions
             },
           ]}
         />

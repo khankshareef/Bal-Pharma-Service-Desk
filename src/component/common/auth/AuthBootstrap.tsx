@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
+
 import Notification_Sound from "../../../assets/Notification_Sound2.wav";
 import { connectSocket, disconnectSocket } from "../../../service/socket";
 import type { AppDispatch, RootState } from "../../../store/store/Store";
@@ -17,7 +18,7 @@ import {
   setConnected,
 } from "../../../store/user/slice/socketSlice";
 import Loader from "../../loader/Loader";
-import NotificationToaster from "../NotificationToaster";
+
 let audioEl: HTMLAudioElement | null = null;
 let audioUnlocked = false;
 let audioCtx: AudioContext | null = null;
@@ -39,8 +40,7 @@ const getAudioCtx = (): AudioContext | null => {
   if (audioCtx) return audioCtx;
   try {
     const Ctx =
-      (window as any).AudioContext ||
-      (window as any).webkitAudioContext;
+      (window as any).AudioContext || (window as any).webkitAudioContext;
     if (!Ctx) return null;
     audioCtx = new Ctx();
   } catch {
@@ -52,15 +52,12 @@ const getAudioCtx = (): AudioContext | null => {
 const playFallbackBeep = () => {
   const ctx = getAudioCtx();
   if (!ctx) return;
-
-  if (ctx.state === "suspended") {
-    ctx.resume().catch(() => {});
-  }
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
 
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.type = "sine";
-  osc.frequency.value = 880; // A5
+  osc.frequency.value = 880;
   gain.gain.value = 0.15;
 
   osc.connect(gain);
@@ -78,10 +75,7 @@ const tryUnlockAudio = () => {
 
   const a = ensureAudio();
   const ctx = getAudioCtx();
-
-  if (ctx && ctx.state === "suspended") {
-    ctx.resume().catch(() => {});
-  }
+  if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
 
   if (!a) {
     audioUnlocked = true;
@@ -218,7 +212,6 @@ const AuthBootstrap = ({ children }: { children: ReactNode }) => {
     const onDisconnect = () => dispatch(setConnected(false));
 
     const onComment = (payload: any) => {
-      console.log("[Ticket_Details] onComment fired", payload);
       const raw = payload?.comment ?? payload;
       const ticketId = Number(
         payload?.ticketId ??
@@ -261,10 +254,14 @@ const AuthBootstrap = ({ children }: { children: ReactNode }) => {
         })
       );
 
-      playNotificationSound(); // 🔊
+      playNotificationSound();
     };
 
     const onNotification = (n: any) => {
+      const idStr = String(n?.id ?? "");
+      const typeStr = String(n?.type ?? "").toUpperCase();
+      if (idStr.startsWith("comment-") || typeStr === "COMMENT") return;
+
       dispatch(
         pushNotification({
           id: n.id ?? undefined,
@@ -276,7 +273,7 @@ const AuthBootstrap = ({ children }: { children: ReactNode }) => {
         })
       );
 
-      playNotificationSound(); // 🔊
+      playNotificationSound();
     };
 
     sock.on("connect", onConnect);
@@ -299,7 +296,7 @@ const AuthBootstrap = ({ children }: { children: ReactNode }) => {
       dispatch(fetchNotifications(employeeId));
     }
   }, [token, employeeId, dispatch]);
-
+ 
   if (!authReady) {
     if (restoreError) {
       return (
@@ -322,12 +319,7 @@ const AuthBootstrap = ({ children }: { children: ReactNode }) => {
     return <Loader />;
   }
 
-  return (
-    <>
-      {children}
-      <NotificationToaster />
-    </>
-  );
+  return children;
 };
 
 export default AuthBootstrap;

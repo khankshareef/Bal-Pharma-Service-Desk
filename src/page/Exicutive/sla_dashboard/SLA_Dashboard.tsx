@@ -12,6 +12,7 @@ import Reusable_Table, {
 
 import { fetchSlaDashboard } from "../../../store/exicutive/slice/slaSlice";
 import type { AppDispatch, RootState } from "../../../store/store/Store";
+import { fetchCategories } from "../../../store/super_admin/slice/CategorySlice";
 import {
   fetchAssignedToExecutive,
   type Ticket,
@@ -53,6 +54,17 @@ const SLA_Dashboard = () => {
 
   const user = useSelector((s: any) => s.auth?.user ?? s.loginRoute?.user);
   const employeeId = user?.employeeId ?? "";
+    const categories = useSelector(
+  (s: any) => s.categories?.categories ?? s.categories?.items ?? s.categories ?? []
+);
+
+const categoryOptions = useMemo(
+  () =>
+    (Array.isArray(categories) ? categories : [])
+      .map((c: any) => String(c?.name ?? "").trim())
+      .filter(Boolean),
+  [categories]
+);
 
   const sla = useSelector((s: RootState) => s.sla.data);
   const slaLoading = useSelector((s: RootState) => s.sla.loading);
@@ -68,6 +80,10 @@ const SLA_Dashboard = () => {
     dispatch(fetchSlaDashboard(employeeId));
     dispatch(fetchAssignedToExecutive(employeeId));
   }, [dispatch, employeeId]);
+
+    useEffect(() => {
+    dispatch(fetchCategories());
+  }, [dispatch]);
 
   const isLoading = slaLoading || ticketsLoading;
 
@@ -216,16 +232,7 @@ const SLA_Dashboard = () => {
             {
               key: "Category",
               label: "Category",
-              options: [
-                "Network",
-                "Hardware",
-                "Software",
-                "Application",
-                "Security",
-                "Database",
-                "Infrastructure",
-                "Access & Permissions",
-              ],
+              options: categoryOptions,
             },
             { key: "SLA", label: "SLA", options: ["On Track", "At Risk", "Breached"] },
           ]}
