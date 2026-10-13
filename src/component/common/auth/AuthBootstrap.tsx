@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from "react-redux";
 import Notification_Sound from "../../../assets/Notification_Sound2.wav";
 import { connectSocket, disconnectSocket } from "../../../service/socket";
 import type { AppDispatch, RootState } from "../../../store/store/Store";
+import store from "../../../store/store/Store";
 import { logout, meApi } from "../../../store/user/slice/Login_Slice";
 import {
   clearNotifications as clearUserNotifications,
@@ -79,7 +80,6 @@ const tryUnlockAudio = () => {
 
   if (!a) {
     audioUnlocked = true;
-    console.log("[sound] no .wav, using fallback beep");
     return;
   }
 
@@ -91,12 +91,10 @@ const tryUnlockAudio = () => {
       a.currentTime = 0;
       a.muted = false;
       audioUnlocked = true;
-      console.log("[sound] audio unlocked ✅");
     })
-    .catch((e) => {
+    .catch(() => {
       a.muted = false;
       audioUnlocked = true;
-      console.log("[sound] .wav unlock failed, using beep:", e?.message);
     });
 };
 
@@ -106,21 +104,36 @@ const playNotificationSound = () => {
     playFallbackBeep();
     return;
   }
-
   try {
     a.currentTime = 0;
     a.muted = false;
     const p = a.play();
     if (p && typeof p.then === "function") {
-      p.then(() => console.log("[sound] played ✅")).catch((e) => {
-        console.log("[sound] .wav play blocked, beep fallback:", e?.message);
-        playFallbackBeep();
-      });
+      p.catch(() => playFallbackBeep());
     }
-  } catch (e) {
-    console.log("[sound] .wav play threw, beep fallback:", e);
+  } catch {
     playFallbackBeep();
   }
+};
+
+const getAuthSnapshot = () => {
+  const s: any = store.getState();
+  const u = s.auth?.user ?? s.loginRoute?.user;
+
+  const rawRole = String(
+    u?.activeRole ??
+      u?.role ??
+      (Array.isArray(u?.roles) && u.roles.length ? u.roles[0] : "") ??
+      ""
+  ).toUpperCase();
+
+  const isAdmin = rawRole === "ADMIN" || rawRole === "SUPER_MANAGER";
+
+  return {
+    userId: u?.userId ?? null,
+    role: rawRole,
+    isAdmin,
+  };
 };
 
 const AuthBootstrap = ({ children }: { children: ReactNode }) => {
@@ -136,29 +149,19 @@ const AuthBootstrap = ({ children }: { children: ReactNode }) => {
   const [restoreAttempt, setRestoreAttempt] = useState(0);
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const restoreStartedFor = useRef<string | null>(null);
-    const activeTicketId = useSelector(
-  (s: any) => s.activeView?.activeTicketId ?? null
-);
-const activeTicketIdRef = useRef<number | null>(null);
 
-const activeRole = useSelector(
-  (s: any) => s.auth?.user?.activeRole ?? s.auth?.user?.role ?? ""
-);
+  const activeTicketId = useSelector(
+    (s: any) => s.activeView?.activeTicketId ?? null
+  );
+  const activeTicketIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    activeTicketIdRef.current = activeTicketId;
+  }, [activeTicketId]);
 
   const currentUserIdRef = useRef<number | null>(null);
   useEffect(() => {
     currentUserIdRef.current = user?.userId ?? null;
   }, [user]);
-
-
-const isAdminRef = useRef(false);
-useEffect(() => {
-  const r = String(activeRole).toUpperCase();
-  isAdminRef.current = r === "ADMIN" || r === "SUPER_MANAGER";
-}, [activeRole]);
-useEffect(() => {
-  activeTicketIdRef.current = activeTicketId;
-}, [activeTicketId]);
 
   useEffect(() => {
     const unlock = () => {
@@ -229,57 +232,61 @@ useEffect(() => {
     const onConnect = () => dispatch(setConnected(true));
     const onDisconnect = () => dispatch(setConnected(false));
 
-   const onComment = (payload: any) => {
-  const raw = payload?.comment ?? payload;
-  const ticketId = Number(
-    payload?.ticketId ??
-      payload?.ticket_id ??
-      raw?.ticketId ??
-      raw?.ticket_id
-  );
-  if (!Number.isFinite(ticketId) || !raw?.id) return;
+    const onComment = (payload: any) => {
+      const raw = payload?.comment ?? payload;
+      const ticketId = Number(
+        payload?.ticketId ??
+          payload?.ticket_id ??
+          raw?.ticketId ??
+          raw?.ticket_id
+      );
+      if (!Number.isFinite(ticketId) || !raw?.id) return;
 
-  const comment: Comment = {
-    id: raw.id,
-    ticketId,
-    authorId: raw.authorId,
-    authorName: raw.authorName,
-    authorInitials: raw.authorInitials ?? "?",
-    body: raw.body,
-    createdAt: raw.createdAt,
-  };
+      const comment: Comment = {
+        id: raw.id,
+        ticketId,
+        authorId: raw.authorId,
+        authorName: raw.authorName,
+        authorInitials: raw.authorInitials ?? "?",
+        body: raw.body,
+        createdAt: raw.createdAt,
+      };
 
-  dispatch(receiveComment(comment));
+      dispatch(receiveComment(comment));
 
-  if (comment.authorId === currentUserIdRef.current) return;
+      const { userId, isAdmin } = getAuthSnapshot();
 
-  const isViewingThisTicket = activeTicketIdRef.current === ticketId;
+      if (comment.authorId === userId) return;
 
-  if (!isViewingThisTicket && !isAdminRef.current) {
-    playNotificationSound();
-  }
+      const isViewingThisTicket =
+        activeTicketIdRef.current === ticketId;
 
-  if (isViewingThisTicket) return;
+      if (!isViewingThisTicket && !isAdmin) {
+        playNotificationSound();
+      }
 
-  const preview =
-    comment.body.length > 90
-      ? `${comment.body.slice(0, 90)}…`
-      : comment.body;
+      if (isViewingThisTicket) return;
 
-  dispatch(
-    pushNotification({
-      id: `comment-${comment.id}`,
-      title: "New message",
-      message: `${comment.authorName}: ${preview}`,
-      type: "COMMENT",
-      source: (raw.authorRole ?? "USER") as
-        | "EXECUTIVE"
-        | "USER"
-        | "ADMIN",
-      ticketId,
-    })
-  );
-};
+      const preview =
+        comment.body.length > 90
+          ? `${comment.body.slice(0, 90)}…`
+          : comment.body;
+
+      dispatch(
+        pushNotification({
+          id: `comment-${comment.id}`,
+          title: "New message",
+          message: `${comment.authorName}: ${preview}`,
+          type: "COMMENT",
+          source: (raw.authorRole ?? "USER") as
+            | "EXECUTIVE"
+            | "USER"
+            | "ADMIN",
+          ticketId,
+        })
+      );
+    };
+
     const onNotification = (n: any) => {
       const idStr = String(n?.id ?? "");
       const typeStr = String(n?.type ?? "").toUpperCase();
@@ -296,7 +303,10 @@ useEffect(() => {
         })
       );
 
-      playNotificationSound();
+      const { isAdmin } = getAuthSnapshot();
+      if (!isAdmin) {
+        playNotificationSound();
+      }
     };
 
     sock.on("connect", onConnect);
@@ -319,7 +329,6 @@ useEffect(() => {
       dispatch(fetchNotifications(employeeId));
     }
   }, [token, employeeId, dispatch]);
- 
   if (!authReady) {
     if (restoreError) {
       return (
@@ -342,7 +351,7 @@ useEffect(() => {
     return <Loader />;
   }
 
-  return children;
+  return <>{children}</>;
 };
 
 export default AuthBootstrap;

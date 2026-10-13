@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import {
   FiArrowLeft,
   FiCheck,
+  FiCopy,
   FiEdit,
   FiKey,
   FiUserX,
+  FiX,
 } from "react-icons/fi";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
@@ -14,6 +16,7 @@ import Loader from "../../../component/loader/Loader";
 
 import {
   fetchUserById,
+  resetUserPassword,
   updateUserStatus,
   type User,
 } from "../../../store/super_admin/slice/usersSlice";
@@ -71,6 +74,10 @@ const AdminUser_Details = () => {
   const [user, setUser] = useState<User | null>(cached ?? null);
   const [loading, setLoading] = useState(!cached);
 
+  const [resetBusy, setResetBusy] = useState(false);
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+
   const UserRole = useMemo(() => {
     if (!user) return "N/A";
     const list =
@@ -114,18 +121,25 @@ const AdminUser_Details = () => {
 
   const handleResetPassword = async () => {
     if (!user) return;
-    const newPassword = prompt(
-      `Reset password for ${user.name} (${user.employeeId}).\nEnter new password (min 6 chars):`
-    );
-    if (!newPassword || newPassword.length < 6) {
-      if (newPassword !== null) alert("Password must be at least 6 characters.");
-      return;
-    }
 
+    if (
+      !confirm(
+        `Reset password for ${user.name} (${user.employeeId})?\nA temporary password will be generated.`
+      )
+    )
+      return;
+
+    setResetBusy(true);
+    setResetError(null);
     try {
-      alert("Password reset functionality not wired yet.");
+      const result = await dispatch(resetUserPassword(user.id)).unwrap();
+      setTempPassword(result.tempPassword);
     } catch (err: any) {
-      alert(err?.error || err?.message || "Failed to reset password.");
+      setResetError(
+        err?.error || err?.message || "Failed to reset password."
+      );
+    } finally {
+      setResetBusy(false);
     }
   };
 
@@ -218,9 +232,10 @@ const AdminUser_Details = () => {
           />
           <Reusable_Button
             onClick={handleResetPassword}
-            children="Reset Password"
+            disabled={resetBusy}
+            children={resetBusy ? "Resetting…" : "Reset Password"}
             leftIcon={<FiKey size={14} />}
-            className="flex items-center gap-2 px-5 py-2 bg-[#b85c14] border border-[#b85c14] rounded-full text-sm font-medium text-white hover:bg-[#9e4e10] transition-colors"
+            className="flex items-center gap-2 px-5 py-2 bg-[#b85c14] border border-[#b85c14] rounded-full text-sm font-medium text-white hover:bg-[#9e4e10] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           />
           <Reusable_Button
             onClick={handleToggleStatus}
@@ -422,6 +437,87 @@ const AdminUser_Details = () => {
           Full activity log will be available once the audit module is wired in.
         </p>
       </div>
+
+      {tempPassword && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-gray-900">
+                Password Reset
+              </h3>
+              <button
+                onClick={() => setTempPassword(null)}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Close"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-3">
+              Share this temporary password with{" "}
+              <strong>{user?.name}</strong>. They must change it on their next
+              login.
+            </p>
+
+            <div className="bg-[#f8f9fb] border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between gap-3 mb-4">
+  <span className="font-mono text-base text-gray-900 break-all">
+    {tempPassword}
+  </span>
+  <button
+    type="button"
+    onClick={async (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+
+      const text = String(tempPassword ?? "");
+      if (!text) return;
+
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand("copy");
+        } finally {
+          document.body.removeChild(ta);
+        }
+      }
+    }}
+    className="text-[#003D8C] hover:text-[#002f6c] shrink-0 cursor-pointer"
+    title="Copy password"
+  >
+    <FiCopy size={16} />
+  </button>
+</div>
+
+            <div className="flex justify-end">
+              <Reusable_Button
+                variant="primary"
+                onClick={() => setTempPassword(null)}
+                children="Done"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resetError && (
+        <div className="fixed bottom-4 right-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 shadow-lg z-50">
+          {resetError}
+          <button
+            onClick={() => setResetError(null)}
+            className="ml-3 text-red-500 hover:text-red-700"
+          >
+            <FiX size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
