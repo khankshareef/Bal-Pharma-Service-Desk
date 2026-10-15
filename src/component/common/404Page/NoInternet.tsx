@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { FiRefreshCcw, FiWifiOff } from "react-icons/fi";
 
+import { useNavigate } from "react-router-dom";
 import bal_pharma_limited_logo from "../../../assets/bal_pharma_limited_logo.jpg";
 import Reusable_Button from "../../button/Reusable_Button";
 
 const NoInternet = () => {
   const [online, setOnline] = useState<boolean>(navigator.onLine);
-  const [retrying, setRetrying] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const goOnline = () => setOnline(true);
@@ -22,10 +23,7 @@ const NoInternet = () => {
   }, []);
 
   const handleRetry = () => {
-    setRetrying(true);
-    setTimeout(() => {
-      window.location.reload();
-    }, 300);
+    navigate("/login", { replace: true });
   };
 
   return (
@@ -66,10 +64,9 @@ const NoInternet = () => {
             variant="primary"
             leftIcon={<FiRefreshCcw size={16} />}
             onClick={handleRetry}
-            disabled={retrying}
             className="w-full sm:w-auto bg-[#003D8C] hover:bg-[#002f6c] text-white"
           >
-            {retrying ? "Retrying…" : "Retry"}
+            Retry
           </Reusable_Button>
         </div>
 

@@ -1,149 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FiChevronDown, FiLogOut, FiUser } from "react-icons/fi";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 
 import bal_pharma_limited_logo from "../../../assets/bal_pharma_limited_logo.jpg";
 
-import type { AppDispatch, RootState } from "../../../store/store/Store";
+import type { AppDispatch } from "../../../store/store/Store";
 import { logout } from "../../../store/user/slice/Login_Slice";
-import {
-  markAllNotificationsRead,
-  markLiveNotificationRead,
-  markNotificationRead,
-  type Notification,
-} from "../../../store/user/slice/NotificationSlice";
-
-const WarningIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="#F59E0B"
-    stroke="#F59E0B"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-    <line x1="12" x2="12" y1="9" y2="13" stroke="white" />
-    <line x1="12" x2="12.01" y1="17" y2="17" stroke="white" />
-  </svg>
-);
-
-const InfoIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="#003D8C"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <line x1="12" x2="12" y1="16" y2="12" stroke="white" strokeWidth="2" />
-    <line x1="12" x2="12.01" y1="8" y2="8" stroke="white" strokeWidth="2" />
-  </svg>
-);
-
-const SuccessIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="#166534"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <path
-      d="m8 12 3 3 5-6"
-      stroke="white"
-      strokeWidth="2"
-      fill="none"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-const ErrorIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="#991B1B"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <line x1="9" y1="9" x2="15" y2="15" stroke="white" strokeWidth="2" />
-    <line x1="15" y1="9" x2="9" y2="15" stroke="white" strokeWidth="2" />
-  </svg>
-);
-
-const iconFor = (type: Notification["type"]) => {
-  switch (type) {
-    case "WARNING": return <WarningIcon />;
-    case "SUCCESS": return <SuccessIcon />;
-    case "ERROR":   return <ErrorIcon />;
-    default:        return <InfoIcon />;
-  }
-};
 
 const Admin_Header = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [, setIsNotificationOpen] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const notificationRef = useRef<HTMLDivElement>(null);
 
   const user = useSelector((s: any) => s.auth?.user ?? s.loginRoute?.user);
-  const employeeId = user?.employeeId ?? "";
-
-const { items: dbNotifications } = useSelector(
-  (s: RootState) => s.notifications
-);
-
-const liveNotifications = useSelector(
-  (s: RootState) => s.socket?.notifications ?? []
-);
-function hashCode(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return h;
-}
-const notifications = useMemo(() => {
-  const seen = new Set<string>();
-  const merged: Notification[] = [];
-
-  for (const n of liveNotifications) {
-    const key = String(n.id);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push({
-      id: typeof n.id === "number" ? n.id : -Math.abs(hashCode(String(n.id))),
-      title: n.title,
-      message: n.message,
-      type: "INFO",
-      ticketId: n.ticketId ?? null,
-      isRead: n.read ?? false,
-      createdAt: n.createdAt,
-    } as Notification);
-  }
-
-  for (const d of dbNotifications) {
-    const key = String(d.id);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(d);
-  }
-
-  return merged;
-}, [dbNotifications, liveNotifications]);
-
-const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -152,12 +25,6 @@ const unreadCount = notifications.filter((n) => !n.isRead).length;
         !dropdownRef.current.contains(event.target as Node)
       ) {
         setIsProfileOpen(false);
-      }
-      if (
-        notificationRef.current &&
-        !notificationRef.current.contains(event.target as Node)
-      ) {
-        setIsNotificationOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -168,32 +35,6 @@ const unreadCount = notifications.filter((n) => !n.isRead).length;
   const handleLogout = () => {
     dispatch(logout());
     navigate("/login");
-  };
-
-  const handleMarkAsRead = (id: number) => {
-    if (id < 0) {
-      dispatch(markLiveNotificationRead(id));
-      return;
-    }
-    if (employeeId) dispatch(markNotificationRead({ id, employeeId }));
-  };
-
-  const handleMarkAllRead = () => {
-    if (employeeId) dispatch(markAllNotificationsRead(employeeId));
-  };
-
-  const goToTicket = (notif: Notification) => {
-    if (notif.ticketId) {
-      const role = user?.role ?? "";
-      if (role === "EMPLOYEE") {
-        navigate(`/employee/my-tickets/tkt-details/${notif.ticketId}`);
-      } else if (role === "EXECUTIVE" || role === "DEPUTY_MANAGER") {
-        navigate(`/executive/assigned/assigned-details/${notif.ticketId}`);
-      } else {
-        navigate(`/super-manager/all-tickets/tkt-details/${notif.ticketId}`);
-      }
-    }
-    setIsNotificationOpen(false);
   };
 
   const initials =

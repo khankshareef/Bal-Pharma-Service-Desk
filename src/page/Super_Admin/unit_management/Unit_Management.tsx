@@ -48,8 +48,8 @@ const Unit_Management = () => {
         UnitID: u.unitCode,
         UnitName: u.unitName,
         Location: u.address,
-        Users: 0,         
-        Executives: 0,
+        Users: u.users ?? 0,
+        Executives: u.executives ?? 0,
         Status: u.active === false ? "Inactive" : "Active",
       })),
     [apiUnits]

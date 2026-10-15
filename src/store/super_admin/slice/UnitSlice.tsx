@@ -13,6 +13,8 @@ export interface Unit {
   active?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  users?: number;
+  executives?: number;
 }
 
 export interface UnitPayload {
@@ -24,6 +26,8 @@ export interface UnitPayload {
   longitude?: number | null;
   radiusMeters?: number | null;
   active?: boolean;
+  users?: number;
+  executives?: number;
 }
 
 export interface UnitStats {

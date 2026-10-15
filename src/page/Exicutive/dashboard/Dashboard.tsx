@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-    FiActivity,
-    FiAlertCircle,
-    FiCheckCircle,
-    FiClock,
-    FiInbox,
+  FiActivity,
+  FiAlertCircle,
+  FiCheckCircle,
+  FiClock,
+  FiInbox,
 } from "react-icons/fi";
 import { HiOutlineTicket } from "react-icons/hi";
 import { useDispatch, useSelector } from "react-redux";
@@ -13,12 +13,12 @@ import { useNavigate } from "react-router-dom";
 import ReusablePopup from "../../../component/popups/Reusable_Popup";
 import Reusable_Stat from "../../../component/stats/Reusable_Stat";
 import Reusable_Table, {
-    type TableColumn,
+  type TableColumn,
 } from "../../../component/table/Reusable_Table";
 
 import {
-    fetchExecDashboard,
-    type RecentTicketItem,
+  fetchExecDashboard,
+  type RecentTicketItem,
 } from "../../../store/exicutive/slice/execDashboardSlice";
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import Exicutive_Dashboard_Chart from "./Exicutive_Dashboard_Chart";

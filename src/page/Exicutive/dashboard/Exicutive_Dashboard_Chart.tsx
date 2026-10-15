@@ -3,22 +3,22 @@ import { GiElectric } from "react-icons/gi";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import {
-    Cell,
-    Pie,
-    PieChart,
-    ResponsiveContainer,
-    Tooltip,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
 } from "recharts";
 
 import Reusable_Table, {
-    type TableColumn,
+  type TableColumn,
 } from "../../../component/table/Reusable_Table";
 
 import { fetchExecStats } from "../../../store/exicutive/slice/execStatsSlice";
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import {
-    fetchAssignedToExecutive,
-    type Ticket,
+  fetchAssignedToExecutive,
+  type Ticket,
 } from "../../../store/user/slice/TicketsSlice";
 
 interface RecentRow {
