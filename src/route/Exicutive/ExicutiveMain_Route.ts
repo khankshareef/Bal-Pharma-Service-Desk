@@ -48,6 +48,10 @@ export const ExicutiveMain_Route = [
         path: "closure/:id",
         Component: Closure,
       },
+      {
+        path: "request-info/:id",
+        Component: Request_Info,
+      },
     ],
   },
 

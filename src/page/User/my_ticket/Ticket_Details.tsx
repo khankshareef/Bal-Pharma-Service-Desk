@@ -11,6 +11,7 @@ import {
 } from "react-icons/fi";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
+import { Reusable_Service } from "../../../service/reusable_service/api";
 
 import AttachmentPreview from "../../../component/attachments/AttachmentPreview";
 import Reusable_Button from "../../../component/button/Reusable_Button";
@@ -121,6 +122,14 @@ const Ticket_Details = () => {
   const [isRating, setRating] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // ---------------- INFO REQUESTS STATE ----------------
+  const [infoRequests, setInfoRequests] = useState<any[]>([]);
+  const [newRequestMessage, setNewRequestMessage] = useState("");
+  const [newRequestFile, setNewRequestFile] = useState<File | null>(null); // <-- Added state for file
+  const [isRequestingInfo, setIsRequestingInfo] = useState(false);
+  const [respondingTo, setRespondingTo] = useState<number | null>(null);
+  const [responseMessage, setResponseMessage] = useState("");
+
   const [typers, setTypers] = useState<
     Record<string, { name: string; at: number }>
   >({});
@@ -154,6 +163,19 @@ const Ticket_Details = () => {
     setPopup({ ...opts, isOpen: true });
   };
 
+  // ---------------- FETCH INFO REQUESTS ----------------
+  const loadInfoRequests = () => {
+    if (!ticketId || Number.isNaN(ticketId)) return;
+    Reusable_Service.get<any[]>(`/ticket-requests/ticket/${ticketId}`)
+      .then((data) => setInfoRequests(data))
+      .catch((err) => console.error("Failed to load info requests", err));
+  };
+
+  useEffect(() => {
+    loadInfoRequests();
+  }, [ticketId]);
+
+  // ---------------- TYPING INDICATOR ----------------
   useEffect(() => {
     if (!ticketId || Number.isNaN(ticketId)) return;
     if (!comment) return;
@@ -172,17 +194,14 @@ const Ticket_Details = () => {
         window.clearTimeout(typingTimeoutRef.current);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comment, ticketId]);
 
   useEffect(() => {
     return () => {
       sendTyping(false);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // -------------------- typing: listen --------------------
   useEffect(() => {
     if (!ticketId || Number.isNaN(ticketId)) return;
     const sock = getSocket();
@@ -226,6 +245,7 @@ const Ticket_Details = () => {
     };
   }, [ticketId, user?.userId, myRole]);
 
+  // ---------------- FETCH TICKET ----------------
   useEffect(() => {
     if (!id) return;
 
@@ -273,6 +293,7 @@ const Ticket_Details = () => {
     dispatch(fetchComments(ticketId));
   }, [ticketId, dispatch]);
 
+  // ---------------- WEBSOCKET LISTENERS ----------------
   useEffect(() => {
     if (!ticketId || Number.isNaN(ticketId)) return;
 
@@ -282,10 +303,7 @@ const Ticket_Details = () => {
     const onComment = (payload: any) => {
       const raw = payload?.comment ?? payload;
       const incomingTicketId = Number(
-        payload?.ticketId ??
-          payload?.ticket_id ??
-          raw?.ticketId ??
-          raw?.ticket_id
+        payload?.ticketId ?? payload?.ticket_id ?? raw?.ticketId ?? raw?.ticket_id
       );
       if (incomingTicketId !== ticketId) return;
       if (!raw?.id) return;
@@ -303,10 +321,39 @@ const Ticket_Details = () => {
       dispatch(receiveComment(c));
     };
 
+  const onNotification = (payload: any) => {
+  const incomingTicketId = Number(payload?.ticketId);
+  if (incomingTicketId !== ticketId) return;
+
+  const type = String(payload?.type ?? "");
+  const newReq = payload?.request; 
+
+  if (type === "TICKET_INFO_REQUESTED" && newReq) {
+    setInfoRequests((prev) => {
+      if (prev.some((r) => r.id === newReq.id)) return prev;
+      return [...prev, newReq];
+    });
+
+    if (myRole === "EMPLOYEE") {
+      showPopup({
+        type: "info",
+        title: "Info Requested",
+        message: `An executive requested: "${newReq.message}"`,
+      });
+    }
+  } 
+  else if (type === "TICKET_INFO_RESPONDED" && newReq) {
+    setInfoRequests((prev) =>
+      prev.map((r) => (r.id === newReq.id ? newReq : r))
+    );
+  }
+};
     sock.on("ticket:comment", onComment);
+    sock.on("notification", onNotification);
 
     return () => {
       sock.off("ticket:comment", onComment);
+      sock.off("notification", onNotification);
     };
   }, [ticketId, dispatch]);
 
@@ -318,13 +365,8 @@ const Ticket_Details = () => {
     if (!ticket) return [];
 
     if (ticket.attachmentUrls && ticket.attachmentUrls.trim().length > 0) {
-      const urls = ticket.attachmentUrls
-        .split(",")
-        .map((u) => u.trim())
-        .filter(Boolean);
-      const names = (ticket.attachmentNames ?? "")
-        .split(",")
-        .map((n) => n.trim());
+      const urls = ticket.attachmentUrls.split(",").map((u) => u.trim()).filter(Boolean);
+      const names = (ticket.attachmentNames ?? "").split(",").map((n) => n.trim());
       return urls.map((u, i) => ({
         url: u,
         name: names[i] || `File ${i + 1}`,
@@ -479,6 +521,73 @@ const Ticket_Details = () => {
     }
   };
 
+  const handleRequestInfo = async () => {
+    if (!newRequestMessage.trim() || !ticket) return;
+
+    try {
+      setIsRequestingInfo(true);
+
+      const formData = new FormData();
+      formData.append("ticketId", String(ticket.id));
+      formData.append("message", newRequestMessage.trim());
+      if (newRequestFile) {
+        formData.append("file", newRequestFile);
+      }
+
+      await Reusable_Service.post(
+        `/ticket-requests?requestedBy=${employeeId}`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+
+      setNewRequestMessage("");
+      setNewRequestFile(null);
+      loadInfoRequests();
+
+      showPopup({
+        type: "success",
+        title: "Request Sent",
+        message: "Information has been requested successfully.",
+      });
+    } catch (err: any) {
+      showPopup({
+        type: "error",
+        title: "Request Failed",
+        message: err?.error || err?.message || "Could not send request.",
+      });
+    } finally {
+      setIsRequestingInfo(false);
+    }
+  };
+
+  const handleRespondInfo = async (requestId: number) => {
+    if (!responseMessage.trim()) return;
+    try {
+      await Reusable_Service.post(
+        `/ticket-requests/${requestId}/respond?respondedBy=${employeeId}`,
+        { response: responseMessage.trim() }
+      );
+      setRespondingTo(null);
+      setResponseMessage("");
+      loadInfoRequests();
+      showPopup({
+        type: "success",
+        title: "Response Sent",
+        message: "Your reply has been submitted.",
+      });
+    } catch (err: any) {
+      showPopup({
+        type: "error",
+        title: "Failed to Respond",
+        message: err?.error || err?.message || "Could not send response.",
+      });
+    }
+  };
+
   const handleRatingSubmit = async (data: {
     rating: number;
     comments: string;
@@ -554,6 +663,12 @@ const Ticket_Details = () => {
   const canReopen = isReopenAllowed(ticket);
   const showRateButton =
     (statusUpper === "RESOLVED" || statusUpper === "CLOSED") && !rating;
+
+  const canRequestInfo =
+    myRole === "EXECUTIVE" ||
+    myRole === "DEPUTY_MANAGER" ||
+    myRole === "SUPER_MANAGER" ||
+    myRole === "ADMIN";
 
   const activity: { time: string; role: string; text: string }[] = [];
   activity.push({
@@ -730,6 +845,154 @@ const Ticket_Details = () => {
             </div>
           </div>
 
+          {/* ---------------- INFO REQUESTS ---------------- */}
+          <div className="bg-white rounded-xl border border-gray-200">
+            <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+              <h3 className="font-bold text-gray-800 text-[15px]">Information Requests</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              {infoRequests.length === 0 ? (
+                <p className="text-sm text-gray-500">No information has been requested yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left text-gray-600">
+                    <thead className="bg-gray-50 text-xs uppercase font-semibold text-gray-700">
+                      <tr>
+                        <th className="px-4 py-2 rounded-tl-lg">Requested By</th>
+                        <th className="px-4 py-2">Message & Attachment</th>
+                        <th className="px-4 py-2">Response</th>
+                        <th className="px-4 py-2 rounded-tr-lg">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {infoRequests.map((req) => (
+                        <tr key={req.id} className="align-top">
+                          <td className="px-4 py-3 font-medium whitespace-nowrap">
+                            {req.requestedByName || "—"}
+                          </td>
+                          <td className="px-4 py-3 max-w-xs break-words">
+                            <p>{req.message}</p>
+                            
+{req.attachments && typeof req.attachments === "string" && (
+  <div className="mt-2 flex flex-col gap-1">
+    {req.attachments.split(",").map((url: string, i: number) => {
+      const filename = url.trim();
+      if (!filename) return null;
+      return (
+        <a
+          key={i}
+          href={fileUrl(filename)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+        >
+          <FiPaperclip size={12} /> View Attachment {i + 1}
+        </a>
+      );
+    })}
+  </div>
+)}
+                          </td>
+                          <td className="px-4 py-3 max-w-xs break-words">
+                            {req.response ? (
+                              <span className="text-green-700">{req.response}</span>
+                            ) : (
+                              <span className="text-gray-400 italic">Pending</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                req.status === "PENDING"
+                                  ? "bg-yellow-100 text-yellow-700"
+                                  : req.status === "RESPONDED"
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-gray-100 text-gray-700"
+                              }`}
+                            >
+                              {req.status}
+                            </span>
+                            {myRole === "EMPLOYEE" && req.status === "PENDING" && (
+                              <div className="mt-2">
+                                {respondingTo === req.id ? (
+                                  <div className="flex flex-col gap-2">
+                                    <textarea
+                                      className="border border-gray-300 rounded px-2 py-1 text-xs"
+                                      value={responseMessage}
+                                      onChange={(e) => setResponseMessage(e.target.value)}
+                                      placeholder="Type your response..."
+                                    />
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleRespondInfo(req.id)}
+                                        className="bg-[#003D8C] text-white rounded px-2 py-1 text-xs hover:bg-[#002D5B]"
+                                      >
+                                        Send
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setRespondingTo(null);
+                                          setResponseMessage("");
+                                        }}
+                                        className="text-gray-500 text-xs hover:underline"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setRespondingTo(req.id)}
+                                    className="text-blue-600 text-xs hover:underline"
+                                  >
+                                    Reply
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Form to request info (only for Executives/Managers) */}
+              {canRequestInfo && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <Reusable_Field
+                    label="Request More Information"
+                    type="textarea"
+                    value={newRequestMessage}
+                    onChange={(e) => setNewRequestMessage(e.target.value)}
+                    placeholder="What info do you need from the employee?"
+                  />
+                  {/* File input added here */}
+                  <div className="mt-3">
+                    <Reusable_Field
+                      label="Attachment (optional)"
+                      type="file"
+                      onChange={(e) => {
+                        const target = e.target as HTMLInputElement;
+                        setNewRequestFile(target.files?.[0] ?? null);
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-end mt-2">
+                    <Reusable_Button
+                      onClick={handleRequestInfo}
+                      disabled={!newRequestMessage.trim() || isRequestingInfo}
+                      variant="primary"
+                    >
+                      {isRequestingInfo ? "Sending..." : "Send Request"}
+                    </Reusable_Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="bg-white rounded-xl border border-gray-200">
             <div className="border-b border-gray-100 px-6 py-4">
               <h3 className="font-bold text-gray-800 text-[15px]">Activity Timeline</h3>
@@ -785,32 +1048,16 @@ const Ticket_Details = () => {
                 </p>
               ) : (
                 comments.map((c) => {
-                  const isMine =
-                    currentUserId !== null && c.authorId === currentUserId;
+                  const isMine = currentUserId !== null && c.authorId === currentUserId;
 
                   return (
-                    <div
-                      key={c.id}
-                      className={`flex gap-2 ${isMine ? "flex-row-reverse" : "flex-row"}`}
-                    >
-                      <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                          isMine ? "bg-blue-600 text-white" : "bg-blue-100 text-blue-700"
-                        }`}
-                      >
+                    <div key={c.id} className={`flex gap-2 ${isMine ? "flex-row-reverse" : "flex-row"}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isMine ? "bg-blue-600 text-white" : "bg-blue-100 text-blue-700"}`}>
                         <span className="text-xs font-bold">{c.authorInitials || "?"}</span>
                       </div>
 
-                      <div
-                        className={`flex-1 rounded-lg px-3 py-2 min-w-0 ${
-                          isMine ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-800"
-                        }`}
-                      >
-                        <div
-                          className={`flex items-center gap-2 mb-0.5 ${
-                            isMine ? "flex-row-reverse justify-end" : ""
-                          }`}
-                        >
+                      <div className={`flex-1 rounded-lg px-3 py-2 min-w-0 ${isMine ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-800"}`}>
+                        <div className={`flex items-center gap-2 mb-0.5 ${isMine ? "flex-row-reverse justify-end" : ""}`}>
                           <span className={`text-sm font-semibold truncate ${isMine ? "text-white" : "text-gray-800"}`}>
                             {isMine ? "You" : c.authorName}
                           </span>

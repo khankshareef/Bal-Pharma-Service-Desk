@@ -85,12 +85,11 @@ const Dashboard = () => {
     []
   );
 
-  /* -------- KPI values (from kpis, not from stats) -------- */
   const kpis = dashboard?.kpis;
   const overview = dashboard?.statusOverview;
 
   const openCount     = kpis?.openTickets        ?? 0;
-  const assignedCount = kpis?.inProgressTickets  ?? 0;   // assigned & being worked
+  const assignedCount = kpis?.inProgressTickets  ?? 0;   
   const investigation = kpis?.inProgressTickets  ?? 0;
   const resolvedCount = kpis?.resolvedTickets    ?? 0;
   const breached      = overview?.overdue        ?? 0;

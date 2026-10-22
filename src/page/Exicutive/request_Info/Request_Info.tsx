@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { FiArrowLeft, FiPaperclip, FiSend } from "react-icons/fi";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
+import { Reusable_Service } from "../../../service/reusable_service/api";
 
 import Reusable_Button from "../../../component/button/Reusable_Button";
 import Reusable_Field from "../../../component/fields/Reusable_Field";
@@ -11,13 +12,6 @@ import ReusablePopup, {
 
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import { fetchTicketById, type Ticket } from "../../../store/user/slice/TicketsSlice";
-
-import {
-  closeRequest,
-  createTicketInfoRequest,
-  fetchRequestsByTicket,
-  type TicketInfoRequest,
-} from "../../../store/exicutive/slice/requestInfoSlice";
 
 interface PopupState {
   isOpen: boolean;
@@ -49,8 +43,8 @@ const Request_Info = () => {
     s.tickets.tickets.find((t: Ticket) => t.id === ticketId)
   );
 
-  const requests = useSelector((s: RootState) => s.requestInfo.list);
-  const loading = useSelector((s: RootState) => s.requestInfo.loading);
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const [message, setMessage] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -58,8 +52,16 @@ const Request_Info = () => {
 
   useEffect(() => {
     if (!ticket && ticketId) dispatch(fetchTicketById(ticketId));
-    if (ticketId) dispatch(fetchRequestsByTicket(ticketId));
+    if (ticketId) {
+      loadRequests();
+    }
   }, [dispatch, ticketId, ticket]);
+
+  const loadRequests = () => {
+    Reusable_Service.get<any[]>(`/ticket-requests/ticket/${ticketId}`)
+      .then((data) => setRequests(data))
+      .catch((err) => console.error("Failed to load requests", err));
+  };
 
   const handleSubmit = async () => {
     if (!message.trim()) {
@@ -73,33 +75,45 @@ const Request_Info = () => {
     }
 
     try {
-      await dispatch(
-        createTicketInfoRequest({
-          ticketId,
-          message: message.trim(),
-          attachmentNames: file?.name,
-          requestedBy: employeeId,
-        })
-      ).unwrap();
+      setLoading(true);
+
+      const formData = new FormData();
+      formData.append("ticketId", String(ticketId));
+      formData.append("message", message.trim());
+      if (file) {
+        formData.append("file", file);
+      }
+
+      await Reusable_Service.post(
+        `/ticket-requests?requestedBy=${employeeId}`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
 
       setPopup({
         isOpen: true,
         type: "success",
         title: "Request Sent",
-        message:
-          "The ticket creator has been notified. Status: PENDING.",
+        message: "The ticket creator has been notified. Status: PENDING.",
       });
 
       setMessage("");
       setFile(null);
-      dispatch(fetchRequestsByTicket(ticketId));
+      loadRequests();
+      
     } catch (err: any) {
       setPopup({
         isOpen: true,
         type: "error",
         title: "Failed",
-        message: err?.message || "Could not send the request.",
+        message: err?.error || err?.message || "Could not send the request.",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -115,14 +129,17 @@ const Request_Info = () => {
       onConfirm: async () => {
         setPopup(emptyPopup);
         try {
-          await dispatch(closeRequest({ id: requestId, employeeId })).unwrap();
+          setLoading(true);
+          await Reusable_Service.post(
+            `/ticket-requests/${requestId}/close?employeeId=${employeeId}`
+          );
           setPopup({
             isOpen: true,
             type: "success",
             title: "Request Closed",
             message: "The request has been marked as CLOSED.",
           });
-          dispatch(fetchRequestsByTicket(ticketId));
+          loadRequests(); 
         } catch (err: any) {
           setPopup({
             isOpen: true,
@@ -130,13 +147,15 @@ const Request_Info = () => {
             title: "Failed to close",
             message: err?.message || "Please try again.",
           });
+        } finally {
+          setLoading(false);
         }
       },
     });
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-full mx-auto">
       <button
         onClick={() => window.history.back()}
         className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 cursor-pointer"
@@ -202,7 +221,7 @@ const Request_Info = () => {
           {requests.length === 0 ? (
             <p className="text-sm text-gray-500">No requests yet.</p>
           ) : (
-            requests.map((r: TicketInfoRequest) => (
+            requests.map((r: any) => (
               <div
                 key={r.id}
                 className="border border-gray-100 rounded-xl p-4 bg-gray-50/50"

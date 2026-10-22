@@ -65,7 +65,6 @@ const Exicutive_Dashboard_Chart = () => {
     dispatch(fetchAssignedToExecutive(employeeId));
   }, [dispatch, employeeId]);
 
-  /* Priority split from the assigned list */
   const pieData = useMemo(() => {
     const counts = { High: 0, Medium: 0, Low: 0 };
     (assigned ?? []).forEach((t: Ticket) => {
