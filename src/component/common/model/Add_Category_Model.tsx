@@ -4,10 +4,10 @@ import { useDispatch, useSelector } from "react-redux";
 
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import {
-    createCategory,
-    updateCategory,
-    type Category,
-    type CategoryPayload,
+  createCategory,
+  updateCategory,
+  type Category,
+  type CategoryPayload,
 } from "../../../store/super_admin/slice/CategorySlice";
 import { fetchDepartments } from "../../../store/super_admin/slice/DepartmentSlice";
 import { fetchUnits } from "../../../store/super_admin/slice/UnitSlice";

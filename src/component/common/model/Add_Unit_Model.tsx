@@ -25,7 +25,7 @@ interface FormState {
   latitude: string;
   longitude: string;
   radiusMeters: string;
-  status: "Active" | "Inactive";
+  status: "Active" | "Inactive";          
 }
 
 const emptyForm: FormState = {

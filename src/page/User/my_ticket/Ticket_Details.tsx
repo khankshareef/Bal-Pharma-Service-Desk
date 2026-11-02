@@ -122,10 +122,9 @@ const Ticket_Details = () => {
   const [isRating, setRating] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  // ---------------- INFO REQUESTS STATE ----------------
   const [infoRequests, setInfoRequests] = useState<any[]>([]);
   const [newRequestMessage, setNewRequestMessage] = useState("");
-  const [newRequestFile, setNewRequestFile] = useState<File | null>(null); // <-- Added state for file
+  const [newRequestFile, setNewRequestFile] = useState<File | null>(null); 
   const [isRequestingInfo, setIsRequestingInfo] = useState(false);
   const [respondingTo, setRespondingTo] = useState<number | null>(null);
   const [responseMessage, setResponseMessage] = useState("");
@@ -163,7 +162,6 @@ const Ticket_Details = () => {
     setPopup({ ...opts, isOpen: true });
   };
 
-  // ---------------- FETCH INFO REQUESTS ----------------
   const loadInfoRequests = () => {
     if (!ticketId || Number.isNaN(ticketId)) return;
     Reusable_Service.get<any[]>(`/ticket-requests/ticket/${ticketId}`)
@@ -175,7 +173,6 @@ const Ticket_Details = () => {
     loadInfoRequests();
   }, [ticketId]);
 
-  // ---------------- TYPING INDICATOR ----------------
   useEffect(() => {
     if (!ticketId || Number.isNaN(ticketId)) return;
     if (!comment) return;
@@ -245,7 +242,6 @@ const Ticket_Details = () => {
     };
   }, [ticketId, user?.userId, myRole]);
 
-  // ---------------- FETCH TICKET ----------------
   useEffect(() => {
     if (!id) return;
 
@@ -293,7 +289,6 @@ const Ticket_Details = () => {
     dispatch(fetchComments(ticketId));
   }, [ticketId, dispatch]);
 
-  // ---------------- WEBSOCKET LISTENERS ----------------
   useEffect(() => {
     if (!ticketId || Number.isNaN(ticketId)) return;
 
@@ -845,7 +840,6 @@ const Ticket_Details = () => {
             </div>
           </div>
 
-          {/* ---------------- INFO REQUESTS ---------------- */}
           <div className="bg-white rounded-xl border border-gray-200">
             <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
               <h3 className="font-bold text-gray-800 text-[15px]">Information Requests</h3>
@@ -872,7 +866,7 @@ const Ticket_Details = () => {
                           </td>
                           <td className="px-4 py-3 max-w-xs break-words">
                             <p>{req.message}</p>
-                            
+
 {req.attachments && typeof req.attachments === "string" && (
   <div className="mt-2 flex flex-col gap-1">
     {req.attachments.split(",").map((url: string, i: number) => {
@@ -958,7 +952,6 @@ const Ticket_Details = () => {
                 </div>
               )}
 
-              {/* Form to request info (only for Executives/Managers) */}
               {canRequestInfo && (
                 <div className="mt-4 pt-4 border-t border-gray-100">
                   <Reusable_Field
@@ -968,7 +961,6 @@ const Ticket_Details = () => {
                     onChange={(e) => setNewRequestMessage(e.target.value)}
                     placeholder="What info do you need from the employee?"
                   />
-                  {/* File input added here */}
                   <div className="mt-3">
                     <Reusable_Field
                       label="Attachment (optional)"

@@ -8,10 +8,10 @@ import Reusable_Field from "../../fields/Reusable_Field";
 
 import type { AppDispatch, RootState } from "../../../store/store/Store";
 import {
-    createDepartment,
-    updateDepartment,
-    type Department,
-    type DepartmentPayload,
+  createDepartment,
+  updateDepartment,
+  type Department,
+  type DepartmentPayload,
 } from "../../../store/super_admin/slice/DepartmentSlice";
 import { fetchUnits } from "../../../store/super_admin/slice/UnitSlice";
 
