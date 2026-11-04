@@ -14,6 +14,9 @@ import Review_Reopen_Main from "../../page/Exicutive/review_reopens/Review_Reope
 import Review_ReOpens from "../../page/Exicutive/review_reopens/Review_ReOpens";
 import SLA_Dashboard from "../../page/Exicutive/sla_dashboard/SLA_Dashboard";
 import SLAMain_Dashboard from "../../page/Exicutive/sla_dashboard/SLAMain_Dashboard";
+import My_Tickets from "../../page/User/my_ticket/My_Tickets";
+import Myticket_Main from "../../page/User/my_ticket/Myticket_Main";
+import Reopen_Ticket from "../../page/User/my_ticket/Reopen_Ticket";
 import Ticket_Details from "../../page/User/my_ticket/Ticket_Details";
 import User_Profile from "../../page/User/user_profile/User_Profile";
 
@@ -132,6 +135,25 @@ export const ExicutiveMain_Route = [
     path: "notification",
     Component: Notification,
   },
+
+  {
+        path: "my-tickets",
+        Component: Myticket_Main,
+        children: [
+            {
+               index: true,
+        Component: My_Tickets,
+            },
+            {
+            path: "tkt-details/:id",
+            Component: Ticket_Details,
+            },
+            {
+                path: "reopen-ticket/:id",
+                Component: Reopen_Ticket,
+            }
+        ]
+    },
 
   {
     path: "executive-profile",

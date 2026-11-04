@@ -127,7 +127,7 @@ const Notification_Page = () => {
 
     const ticketId = notif.ticketId ?? null;
     if (ticketId) {
-      navigate(`../my-tickets/tkt-details/${ticketId}`);
+      navigate(`../assigned/assigned-details/1${ticketId}`);
     }
   };
 

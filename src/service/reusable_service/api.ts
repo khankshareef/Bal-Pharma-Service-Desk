@@ -4,7 +4,7 @@ import axios, {
   type AxiosResponse,
 } from "axios";
 
-const BaseUrl = import.meta.env.VITE_BASE_URL;
+const BaseUrl = import.meta.env.VITE_BASE_URL || window.location.origin;
 
 type Coords = { lat: number; lng: number };
 
